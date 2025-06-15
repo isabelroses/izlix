@@ -29,7 +29,7 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Update flake inputs
-        run: nix flake update --commit-lock-file
+        run: nix flake update nixpkgs --commit-lock-file
 
       - name: Pull upstream changes
         run: |
