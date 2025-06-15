@@ -3,7 +3,6 @@
   pkgsStatic,
   lib,
   stdenv,
-  aws-sdk-cpp,
   # If the patched version of Boehm isn't passed, then patch it based off of
   # pkgs.boehmgc. This allows `callPackage`ing this file without needing to
   # to implement behavior that this package flat out doesn't build without
@@ -61,6 +60,8 @@
   utillinuxMinimal ? null,
   xz,
   yq,
+
+  fetchpatch,
 
   busybox-sandbox-shell,
 
@@ -135,18 +136,6 @@ let
 
   # This is for sys/sdt.h
   dtrace-headers = if withDtrace then libsystemtap else null;
-
-  aws-sdk-cpp-nix =
-    if aws-sdk-cpp == null then
-      null
-    else
-      aws-sdk-cpp.override {
-        apis = [
-          "s3"
-          "transfer"
-        ];
-        customMemoryManagement = false;
-      };
 
   # Reimplementation of Nixpkgs' Meson cross file, with some additions to make
   # it actually work.
@@ -235,12 +224,13 @@ stdenv.mkDerivation (finalAttrs: {
     );
   };
 
-  outputs =
-    [ "out" ]
-    ++ lib.optionals (!finalAttrs.dontBuild) [
-      "dev"
-      "doc"
-    ];
+  outputs = [
+    "out"
+  ]
+  ++ lib.optionals (!finalAttrs.dontBuild) [
+    "dev"
+    "doc"
+  ];
 
   dontBuild = lintInsteadOfBuild;
 
@@ -282,81 +272,109 @@ stdenv.mkDerivation (finalAttrs: {
   # We only include CMake so that Meson can locate toml11, which only ships CMake dependency metadata.
   dontUseCmakeConfigure = true;
 
-  nativeBuildInputs =
-    [
-      finalAttrs.lixPythonForBuild
-      meson
-      ninja
-      cmake
-      rustc
-      capnproto
-      # Required for libstd++ assertions that leaks inside of the final binary.
-      removeReferencesTo
-      dtrace-generator
-    ]
-    ++ [
-      (lib.getBin lowdown-unsandboxed)
-      mdbook
-      mdbook-linkcheck
-    ]
-    ++ [
-      pkg-config
+  patches = [
+    # adds a --call-package or -C cli option to build a package from the cli
+    # based on the work of https://github.com/privatevoid-net/nix-super
+    ./patches/callpackage-cli.patch
 
-      # Tests
-      git
-      mercurial
-      jq
-      yq
-      lsof
-    ]
-    ++ lib.optional hostPlatform.isLinux util-linuxMinimal
-    ++ lib.optional (!officialRelease && buildUnreleasedNotes) build-release-notes
-    ++ lib.optional internalApiDocs doxygen
-    ++ lib.optionals lintInsteadOfBuild [
-      # required for a wrapped clang-tidy
-      llvmPackages.clang-tools
-      # load-bearing order (just as below); the actual stdenv wrapped clang
-      # needs to precede the unwrapped clang in PATH such that calling `clang`
-      # can compile things.
-      stdenv.cc
-      # required for run-clang-tidy
-      llvmPackages.clang-unwrapped
-    ];
+    # don't alter the names of derivations for nix store diff-closure
+    ./patches/closure-names.patch
 
-  buildInputs =
-    [
-      curl
-      bzip2
-      xz
-      brotli
-      editline-lix
-      openssl
-      sqlite
-      libarchive
-      boost
-      lowdown
-      libsodium
-      toml11
-      pegtl
-      capnproto
-      dtrace-headers
-    ]
-    # NOTE(Raito): I'd have expected that the LLVM packaging would inject the
-    # libunwind library path directly in the wrappers, but it does inject
-    # -lunwind without injecting the library path...
-    ++ lib.optionals stdenv.hostPlatform.isStatic [ llvmPackages.libunwind ]
-    ++ lib.optionals hostPlatform.isLinux [
-      libseccomp
-      passt-lix
-    ]
-    ++ lib.optional internalApiDocs rapidcheck
-    ++ lib.optional hostPlatform.isx86_64 libcpuid
-    # There have been issues building these dependencies
-    ++ lib.optional (hostPlatform.canExecute buildPlatform) aws-sdk-cpp-nix
-    ++ lib.optionals (finalAttrs.dontBuild) maybePropagatedInputs
-    # I am so sorry. This is because checkInputs are required to pass
-    # configure, but we don't actually want to *run* the checks here.
-    ++ lib.optionals lintInsteadOfBuild finalAttrs.checkInputs;
+    # add more builtins to lix, this consists of the following:
+    # - `builtins.abs` which will get you a absolute value of a number
+    ./patches/feat-builtins-abs.patch
+    # - `builtins.greaterThan` which will return true if the first argument is greater than the second
+    ./patches/feat-builtins-greaterThan.patch
+    # - `builtins.pow` which will raise the first argument to the power of the second
+    ./patches/feat-builtins-pow.patch
+
+    # add smart terminal features with attribute meta in nix repl
+    (fetchpatch {
+      url = "https://gerrit.lix.systems/changes/lix~3790/revisions/4/patch?download";
+      decode = "base64 --decode";
+      hash = "sha256-tESRIO8LzVn1tODEq+wMaS5/OdqMbgr8CrZWc1ZU+ds=";
+    })
+  ];
+
+  # Kinda funny right
+  # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
+  postPatch = ''
+    substituteInPlace lix/libmain/shared.cc \
+      --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
+  '';
+
+  nativeBuildInputs = [
+    finalAttrs.lixPythonForBuild
+    meson
+    ninja
+    cmake
+    rustc
+    capnproto
+    # Required for libstd++ assertions that leaks inside of the final binary.
+    removeReferencesTo
+    dtrace-generator
+  ]
+  ++ [
+    (lib.getBin lowdown-unsandboxed)
+    mdbook
+    mdbook-linkcheck
+  ]
+  ++ [
+    pkg-config
+
+    # Tests
+    git
+    mercurial
+    jq
+    yq
+    lsof
+  ]
+  ++ lib.optional hostPlatform.isLinux util-linuxMinimal
+  ++ lib.optional (!officialRelease && buildUnreleasedNotes) build-release-notes
+  ++ lib.optional internalApiDocs doxygen
+  ++ lib.optionals lintInsteadOfBuild [
+    # required for a wrapped clang-tidy
+    llvmPackages.clang-tools
+    # load-bearing order (just as below); the actual stdenv wrapped clang
+    # needs to precede the unwrapped clang in PATH such that calling `clang`
+    # can compile things.
+    stdenv.cc
+    # required for run-clang-tidy
+    llvmPackages.clang-unwrapped
+  ];
+
+  buildInputs = [
+    curl
+    bzip2
+    xz
+    brotli
+    editline-lix
+    openssl
+    sqlite
+    libarchive
+    boost
+    lowdown
+    libsodium
+    toml11
+    pegtl
+    capnproto
+    dtrace-headers
+  ]
+  # NOTE(Raito): I'd have expected that the LLVM packaging would inject the
+  # libunwind library path directly in the wrappers, but it does inject
+  # -lunwind without injecting the library path...
+  ++ lib.optionals stdenv.hostPlatform.isStatic [ llvmPackages.libunwind ]
+  ++ lib.optionals hostPlatform.isLinux [
+    libseccomp
+    passt-lix
+  ]
+  ++ lib.optional internalApiDocs rapidcheck
+  ++ lib.optional hostPlatform.isx86_64 libcpuid
+  # There have been issues building these dependencies
+  ++ lib.optionals (finalAttrs.dontBuild) maybePropagatedInputs
+  # I am so sorry. This is because checkInputs are required to pass
+  # configure, but we don't actually want to *run* the checks here.
+  ++ lib.optionals lintInsteadOfBuild finalAttrs.checkInputs;
 
   checkInputs = [
     gtest
@@ -371,18 +389,17 @@ stdenv.mkDerivation (finalAttrs: {
     finalAttrs.lixPythonForBuild
   ];
 
-  env =
-    {
-      # Meson allows referencing a /usr/share/cargo/registry shaped thing for subproject sources.
-      # Turns out the Nix-generated Cargo dependencies are named the same as they
-      # would be in a Cargo registry cache.
-      MESON_PACKAGE_CACHE_DIR = finalAttrs.cargoDeps;
+  env = {
+    # Meson allows referencing a /usr/share/cargo/registry shaped thing for subproject sources.
+    # Turns out the Nix-generated Cargo dependencies are named the same as they
+    # would be in a Cargo registry cache.
+    MESON_PACKAGE_CACHE_DIR = finalAttrs.cargoDeps;
 
-      VERSION_SUFFIX = versionSuffix;
-    }
-    // lib.optionalAttrs hostPlatform.isLinux {
-      BUILD_TEST_SHELL = "${pkgsStatic.busybox}/bin";
-    };
+    VERSION_SUFFIX = versionSuffix;
+  }
+  // lib.optionalAttrs hostPlatform.isLinux {
+    BUILD_TEST_SHELL = "${pkgsStatic.busybox}/bin";
+  };
 
   cargoDeps = rustPlatform.importCargoLock { lockFile = ./Cargo.lock; };
 
