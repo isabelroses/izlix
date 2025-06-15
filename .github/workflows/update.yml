@@ -1,0 +1,42 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    name: Update flake inputs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Lix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          source-url: 'https://install.lix.systems/lix/lix-installer-x86_64-linux'
+          logger: pretty
+          diagnostic-endpoint: ""
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update flake inputs
+        run: nix flake update nixpkgs --commit-lock-file
+
+      - name: Pull upstream changes
+        run: |
+          git remote add upstream https://git.lix.systems/lix-project/lix.git
+          git fetch upstream
+          git rebase upstream/main
+
+      - name: Push changes
+        run: |
+          git push origin HEAD:main --force
