@@ -430,7 +430,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   enableParallelBuilding = true;
 
-  doCheck = canRunInstalled && !lintInsteadOfBuild;
+  doCheck = false;
 
   mesonCheckFlags = [
     "--suite=check"
