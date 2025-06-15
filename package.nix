@@ -3,7 +3,6 @@
   lib,
   stdenv,
   apple-sdk_11,
-  aws-sdk-cpp,
   # If the patched version of Boehm isn't passed, then patch it based off of
   # pkgs.boehmgc. This allows `callPackage`ing this file without needing to
   # to implement behavior that this package flat out doesn't build without
@@ -140,18 +139,6 @@ let
   # This is for sys/sdt.h
   dtrace-headers = lib.optional withDtrace libsystemtap;
 
-  aws-sdk-cpp-nix =
-    if aws-sdk-cpp == null then
-      null
-    else
-      aws-sdk-cpp.override {
-        apis = [
-          "s3"
-          "transfer"
-        ];
-        customMemoryManagement = false;
-      };
-
   # Reimplementation of Nixpkgs' Meson cross file, with some additions to make
   # it actually work.
   mesonCrossFile = builtins.toFile "lix-cross-file.conf" ''
@@ -282,6 +269,30 @@ stdenv.mkDerivation (finalAttrs: {
   # We only include CMake so that Meson can locate toml11, which only ships CMake dependency metadata.
   dontUseCmakeConfigure = true;
 
+  patches = [
+    # adds a --call-package or -C cli option to build a package from the cli
+    # based on the work of https://github.com/privatevoid-net/nix-super
+    ./patches/callpackage-cli.patch
+
+    # don't alter the names of derivations for nix store diff-closure
+    ./patches/closure-names.patch
+
+    # add more builtins to lix, this consists of the following:
+    # - `builtins.abs` which will get you a absolute value of a number
+    ./patches/feat-builtins-abs.patch
+    # - `builtins.greaterThan` which will return true if the first argument is greater than the second
+    ./patches/feat-builtins-greaterThan.patch
+    # - `builtins.pow` which will raise the first argument to the power of the second
+    ./patches/feat-builtins-pow.patch
+  ];
+
+  # Kinda funny right
+  # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
+  postPatch = ''
+    substituteInPlace lix/libmain/shared.cc \
+      --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
+  '';
+
   nativeBuildInputs =
     [
       finalAttrs.lixPythonForBuild
@@ -356,7 +367,6 @@ stdenv.mkDerivation (finalAttrs: {
     ++ lib.optional internalApiDocs rapidcheck
     ++ lib.optional hostPlatform.isx86_64 libcpuid
     # There have been issues building these dependencies
-    ++ lib.optional (hostPlatform.canExecute buildPlatform) aws-sdk-cpp-nix
     ++ lib.optionals (finalAttrs.dontBuild) maybePropagatedInputs
     # I am so sorry. This is because checkInputs are required to pass
     # configure, but we don't actually want to *run* the checks here.
