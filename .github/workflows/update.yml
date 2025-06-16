@@ -35,8 +35,9 @@ jobs:
         run: |
           git remote add upstream https://git.lix.systems/lix-project/lix.git
           git fetch upstream
-          git rebase upstream/main
-          git push origin main
+          git checkout upstream/main
+          git rebase origin/main
+          git push origin HEAD:main
 
   build:
     name: Build (${{ matrix.system }})
