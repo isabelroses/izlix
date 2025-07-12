@@ -1,4 +1,4 @@
-name: Build and populate cache
+name: update
 
 on:
   schedule:
@@ -35,51 +35,8 @@ jobs:
         run: |
           git remote add upstream https://git.lix.systems/lix-project/lix.git
           git fetch upstream
-          git checkout upstream/main
-          git rebase origin/main
-          git push origin HEAD:main
+          git rebase upstream/main
 
-  build:
-    name: Build (${{ matrix.system }})
-    runs-on: ${{ matrix.os }}
-    needs: update
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            system: x86_64-linux
-          - os: macos-latest
-            system: aarch64-darwin
-          - os: ubuntu-24.04-arm
-            system: aarch64-linux
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Lix
-        uses: DeterminateSystems/nix-installer-action@main
-        with:
-          source-url: 'https://install.lix.systems/lix/lix-installer-${{ matrix.system }}'
-          logger: pretty
-          diagnostic-endpoint: ""
-
-      # https://git.lix.systems/lix-project/lix/issues/545
-      - name: Loosen apparmor restrictions
-        if: matrix.os != 'macos-latest'
+      - name: Push changes
         run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Setup Attic
-        uses: ryanccn/attic-action@v0.3.2
-        with:
-          inputs-from: flake.lock
-          endpoint: https://cache.tgirl.cloud
-          cache: tgirlcloud
-          token: ${{ secrets.ATTIC_TOKEN }}
-
-      - name: Build lix
-        run: nix build -L .#nix
+          git push origin HEAD:main --force
