@@ -163,6 +163,9 @@ void initLibExpr()
 
     GC_INIT();
 
+    // Enable parallel marking
+    GC_start_mark_threads();
+
     GC_set_oom_fn(oomHandler);
 
     /* Set the initial heap size to something fairly big (25% of
