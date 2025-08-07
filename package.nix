@@ -294,6 +294,24 @@ stdenv.mkDerivation (finalAttrs: {
       decode = "base64 --decode";
       hash = "sha256-tESRIO8LzVn1tODEq+wMaS5/OdqMbgr8CrZWc1ZU+ds=";
     })
+
+    # the bellow two patches conflict with each other
+
+    #  warn when encountering IFD with
+    # https://gerrit.lix.systems/c/lix/+/3879
+    # (fetchpatch {
+    #   url = "https://gerrit.lix.systems/changes/lix~3879/revisions/5/patch?download";
+    #   decode = "base64 --decode";
+    #   hash = "sha256-8hMMb/fMqLv1rxIkE3Ib+KGcgqK2CCDc0hI8LCkvJuw=";
+    # })
+
+    # nix flake check: Skip substitutable derivations
+    # https://gerrit.lix.systems/c/lix/+/3841
+    (fetchpatch {
+      url = "https://gerrit.lix.systems/changes/lix~3841/revisions/7/patch?download";
+      decode = "base64 --decode";
+      hash = "sha256-HX2co8RAEUdSKsKNb+Fzbhgd3t3hexMJiuoZl9Li6Gw=";
+    })
   ];
 
   # Kinda funny right
