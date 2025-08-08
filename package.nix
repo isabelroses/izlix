@@ -295,6 +295,8 @@ stdenv.mkDerivation (finalAttrs: {
     ./patches/feat-builtins-greaterThan.patch
     # - `builtins.pow` which will raise the first argument to the power of the second
     ./patches/feat-builtins-pow.patch
+    # - `builtins.mod` will return the remainder of the first argument divided by the second
+    ./patches/feat-builtins-mod.patch
 
     # add smart terminal features with attribute meta in nix repl
     (fetchpatch {
