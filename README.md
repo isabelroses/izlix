@@ -9,6 +9,7 @@ I add the following patches:
 - [abs builtin](https://github.com/isabelroses/izlix/blob/main/patches/lix-feat-builtins-abs.patch) - adds the `abs` builtin
 - [greaterThan builtin](https://github.com/isabelroses/izlix/blob/main/patches/lix-feat-builtins-greaterThan.patch) - adds the `greaterThan` builtin
 - [pow builtin](https://github.com/isabelroses/izlix/blob/main/patches/lix-feat-builtins-pow.patch) - adds the `pow` builtin
+- [mod builtin](https://github.com/isabelroses/izlix/blob/main/patches/lix-feat-builtins-mod.patch) - adds the `mod` builtin
 
 - [hyperlink attr names to their definition locations in repl](https://gerrit.lix.systems/c/lix/+/3790)
 - [nix flake check: Skip substitutable derivation](https://gerrit.lix.systems/c/lix/+/3841)
