@@ -1,0 +1,60 @@
+From 28dd3aa6dab6ff96c2f8fa12dba0a4d883b45f6f Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Fri, 8 Aug 2025 10:12:37 +0100
+Subject: [PATCH] feat(builtins): mod
+
+---
+ lix/libexpr/builtins/mod.md |  5 +++++
+ lix/libexpr/meson.build     |  1 +
+ lix/libexpr/primops.cc      | 12 ++++++++++++
+ 3 files changed, 18 insertions(+)
+ create mode 100644 lix/libexpr/builtins/mod.md
+
+diff --git a/lix/libexpr/builtins/mod.md b/lix/libexpr/builtins/mod.md
+new file mode 100644
+index 000000000..7833f9e32
+--- /dev/null
++++ b/lix/libexpr/builtins/mod.md
+@@ -0,0 +1,5 @@
++---
++name: mod
++args: [e1, e2]
++---
++Returns the result is the remainder of *e1* divided by *e2*.
+diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
+index 8a5cde12b..c41327ad7 100644
+--- a/lix/libexpr/meson.build
++++ b/lix/libexpr/meson.build
+@@ -114,6 +114,7 @@ builtin_definitions = files(
+   'builtins/map.md',
+   'builtins/mapAttrs.md',
+   'builtins/match.md',
++  'builtins/mod.md',
+   'builtins/mul.md',
+   'builtins/parseDrvName.md',
+   'builtins/parseFlakeRef.md',
+diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
+index 49a7bacde..59741695e 100644
+--- a/lix/libexpr/primops.cc
++++ b/lix/libexpr/primops.cc
+@@ -2375,6 +2375,18 @@ static void prim_div(EvalState & state, Value * * args, Value & v)
+     }
+ }
+ 
++static void prim_mod(EvalState & state, Value * * args, Value & v) {
++    int i2 = state.forceInt(*args[1], noPos, "while evaluating the second operand of the modulo operation").value;
++
++    if (i2 == 0) {
++        state.ctx.errors.make<EvalError>("Division by zero in modulo operation").debugThrow();
++    }
++
++    int i1 = state.forceInt(*args[0], noPos, "while evaluating the first operand of the modulo operation").value;
++
++    v.mkInt(i1 % i2);
++}
++
+ static void prim_bitAnd(EvalState & state, Value * * args, Value & v)
+ {
+     auto i1 = state.forceInt(*args[0], noPos, "while evaluating the first argument passed to builtins.bitAnd");
+-- 
+2.50.1

@@ -1,0 +1,57 @@
+name: Build Lix
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - update
+    types:
+      - completed
+
+jobs:
+  build:
+    name: Build (${{ matrix.system }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: macos-latest
+            system: aarch64-darwin
+          - os: ubuntu-24.04-arm
+            system: aarch64-linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # catfooding lix
+      - name: Install Lix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          source-url: 'https://install.lix.systems/lix/lix-installer-${{ matrix.system }}'
+          logger: pretty
+          diagnostic-endpoint: ""
+
+      # https://git.lix.systems/lix-project/lix/issues/545
+      - name: Loosen apparmor restrictions
+        if: matrix.os != 'macos-latest'
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Setup Attic
+        uses: ryanccn/attic-action@v0.4.0
+        with:
+          inputs-from: flake.lock
+          endpoint: https://cache.tgirl.cloud
+          cache: tgirlcloud
+          token: ${{ secrets.ATTIC_TOKEN }}
+          exclude-paths: "-(vendor|source)$"
+
+      - name: Build lix
+        run: nix build -L .#lix
+
