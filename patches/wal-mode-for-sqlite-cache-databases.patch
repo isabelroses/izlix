@@ -1,0 +1,145 @@
+From 99223cb83a3b7342614e7f4cb6c70d3d92fd3924 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Thu, 28 Aug 2025 08:52:13 +0100
+Subject: [PATCH] treewide: Use WAL mode for SQLite cache databases
+
+a port of https://github.com/NixOS/nix/pull/13800 to lix
+---
+ lix/libexpr/eval-cache.cc            | 4 ++--
+ lix/libfetchers/cache.cc             | 2 +-
+ lix/libstore/local-store.cc          | 3 +--
+ lix/libstore/nar-info-disk-cache.cc  | 2 +-
+ lix/libstore/sqlite.cc               | 6 +++---
+ lix/libstore/sqlite.hh               | 3 ++-
+ tests/functional2/store/test_http.py | 2 +-
+ 7 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/lix/libexpr/eval-cache.cc b/lix/libexpr/eval-cache.cc
+index afce5633c..dcbd784ce 100644
+--- a/lix/libexpr/eval-cache.cc
++++ b/lix/libexpr/eval-cache.cc
+@@ -39,10 +39,10 @@ struct AttrDb
+     {
+         auto state(_state->lock());
+ 
+-        Path cacheDir = getCacheDir() + "/nix/eval-cache-v5";
++        auto cacheDir = std::filesystem::path(getCacheDir()) / "eval-cache-v6";
+         createDirs(cacheDir);
+ 
+-        Path dbPath = cacheDir + "/" + fingerprint.to_string(Base::Base16, false) + ".sqlite";
++        auto dbPath = cacheDir / (fingerprint.to_string(Base::Base16, false) + ".sqlite");
+ 
+         state->db = SQLite(dbPath);
+         state->db.isCache();
+diff --git a/lix/libfetchers/cache.cc b/lix/libfetchers/cache.cc
+index 9166282b7..9f9aa7f47 100644
+--- a/lix/libfetchers/cache.cc
++++ b/lix/libfetchers/cache.cc
+@@ -37,7 +37,7 @@ struct CacheImpl : Cache
+     {
+         auto state(_state.lock());
+ 
+-        auto dbPath = getCacheDir() + "/nix/fetcher-cache-v1.sqlite";
++        auto dbPath = getCacheDir() + "/nix/fetcher-cache-v2.sqlite";
+         // It would be silly to fail fetcher operations if e.g. the user has no
+         // XDG_CACHE_HOME and their HOME directory doesn't exist.
+         // We'll warn the user if that happens, but fallback to an in-memory
+diff --git a/lix/libstore/local-store.cc b/lix/libstore/local-store.cc
+index 1e786f46b..071ea8ea4 100644
+--- a/lix/libstore/local-store.cc
++++ b/lix/libstore/local-store.cc
+@@ -381,12 +381,11 @@ void LocalStore::openDB(DBState & state, bool create)
+         throw SysError("Nix database directory '%1%' is not writable", dbDir);
+ 
+     /* Open the Nix database. */
+-    std::string dbPath = dbDir + "/db.sqlite";
+     auto & db(state.db);
+     auto openMode = config_.readOnly ? SQLiteOpenMode::Immutable
+                   : create ? SQLiteOpenMode::Normal
+                   : SQLiteOpenMode::NoCreate;
+-    state.db = SQLite(dbPath, openMode);
++    state.db = SQLite(std::filesystem::path(dbDir) / "db.sqlite", openMode);
+ 
+     /* !!! check whether sqlite has been built with foreign key
+        support */
+diff --git a/lix/libstore/nar-info-disk-cache.cc b/lix/libstore/nar-info-disk-cache.cc
+index 0e3bce2b1..2e06f4696 100644
+--- a/lix/libstore/nar-info-disk-cache.cc
++++ b/lix/libstore/nar-info-disk-cache.cc
+@@ -78,7 +78,7 @@ public:
+ 
+     Sync<State> _state;
+ 
+-    NarInfoDiskCacheImpl(Path dbPath = getCacheDir() + "/nix/binary-cache-v6.sqlite")
++    NarInfoDiskCacheImpl(Path dbPath = getCacheDir() + "/nix/binary-cache-v7.sqlite")
+     {
+         auto state(_state.lock());
+ 
+diff --git a/lix/libstore/sqlite.cc b/lix/libstore/sqlite.cc
+index f90757d1f..931ddb12a 100644
+--- a/lix/libstore/sqlite.cc
++++ b/lix/libstore/sqlite.cc
+@@ -60,7 +60,7 @@ static void traceSQL(void * x, const char * sql)
+     notice("SQL<[%1%]>", sql);
+ };
+ 
+-SQLite::SQLite(const Path & path, SQLiteOpenMode mode)
++SQLite::SQLite(const std::filesystem::path & path, SQLiteOpenMode mode)
+ {
+     // useSQLiteWAL also indicates what virtual file system we need.  Using
+     // `unix-dotfile` is needed on NFS file systems and on Windows' Subsystem
+@@ -69,7 +69,7 @@ SQLite::SQLite(const Path & path, SQLiteOpenMode mode)
+     bool immutable = mode == SQLiteOpenMode::Immutable;
+     int flags = immutable ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE;
+     if (mode == SQLiteOpenMode::Normal) flags |= SQLITE_OPEN_CREATE;
+-    auto uri = "file:" + percentEncode(path) + "?immutable=" + (immutable ? "1" : "0");
++    auto uri = "file:" + percentEncode(path.string()) + "?immutable=" + (immutable ? "1" : "0");
+     sqlite3 * db;
+     int ret = sqlite3_open_v2(uri.c_str(), &db, SQLITE_OPEN_URI | flags, vfs);
+     if (ret != SQLITE_OK) {
+@@ -102,7 +102,7 @@ void SQLite::Close::operator()(sqlite3 * db)
+ void SQLite::isCache()
+ {
+     exec("pragma synchronous = off", always_progresses);
+-    exec("pragma main.journal_mode = truncate", always_progresses);
++    exec("pragma main.journal_mode = wal", always_progresses);
+ }
+ 
+ void SQLite::exec(const std::string & stmt, NeverAsync)
+diff --git a/lix/libstore/sqlite.hh b/lix/libstore/sqlite.hh
+index 5d3aa52ef..6fd0a7604 100644
+--- a/lix/libstore/sqlite.hh
++++ b/lix/libstore/sqlite.hh
+@@ -1,6 +1,7 @@
+ #pragma once
+ ///@file
+ 
++#include <filesystem>
+ #include <chrono>
+ #include <kj/async.h>
+ #include <string>
+@@ -79,7 +80,7 @@ class SQLite
+ 
+ public:
+     SQLite() = default;
+-    SQLite(const Path & path, SQLiteOpenMode mode = SQLiteOpenMode::Normal);
++    SQLite(const std::filesystem::path & path, SQLiteOpenMode mode = SQLiteOpenMode::Normal);
+ 
+     /**
+      * Disable synchronous mode, set truncate journal mode.
+diff --git a/tests/functional2/store/test_http.py b/tests/functional2/store/test_http.py
+index ebfea82f8..bc48e35fa 100644
+--- a/tests/functional2/store/test_http.py
++++ b/tests/functional2/store/test_http.py
+@@ -108,7 +108,7 @@ def test_http_simple(nix: Nix, store: HTTPStore, files: Path):
+     store_path = result.stdout_plain
+     hash_part, _ = Path(store_path).stem.split("-", 1)
+ 
+-    nar_info_cache = nix.env.dirs.xdg_cache_home / "nix" / "binary-cache-v6.sqlite"
++    nar_info_cache = nix.env.dirs.xdg_cache_home / "nix" / "binary-cache-v7.sqlite"
+ 
+     app = start_server(store)
+     with http_server(app) as httpd:
+-- 
+2.49.0
+
