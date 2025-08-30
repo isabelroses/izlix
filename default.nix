@@ -27,7 +27,7 @@ let
 
         # TODO: upstream this?
         # a port of <https://github.com/NixOS/nix/pull/13800> for lix
-        ./patches/wal-mode-for-sqlite-cache-databases.patch
+        # ./patches/wal-mode-for-sqlite-cache-databases.patch
 
         # add more builtins to lix, this consists of the following:
         # - `builtins.abs` which will get you a absolute value of a number
