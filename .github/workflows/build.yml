@@ -50,8 +50,18 @@ jobs:
           endpoint: https://cache.tgirl.cloud
           cache: tgirlcloud
           token: ${{ secrets.ATTIC_TOKEN }}
-          exclude-paths: "-(vendor|source)$"
+          exclude-paths: "-(vendor|source|patch)$"
 
-      - name: Build lix
-        run: nix build -L .#lix
+      # this will build lix and its dependencies, and then build nix-fast-build
+      # following that we can then use nix-fast-build to build the rest of the
+      # flake's outputs
+      - name: Build nix-fast-build
+        run: nix build .#nix-fast-build
 
+      - name: Build from the matrix
+        run: |
+          ./result/bin/nix-fast-build \
+            --no-nom \
+            --skip-cached \
+            --systems '${{ matrix.system }}' \
+            --flake '.#hydraJobs.${{ matrix.system }}'
