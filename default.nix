@@ -43,26 +43,32 @@ let
         #
         #  warn when encountering IFD with
         # https://gerrit.lix.systems/c/lix/+/3879
-        # (fetchpatch {
-        #   url = "https://gerrit.lix.systems/changes/lix~3879/revisions/5/patch?download";
-        #   decode = "base64 --decode";
-        #   hash = "sha256-8hMMb/fMqLv1rxIkE3Ib+KGcgqK2CCDc0hI8LCkvJuw=";
-        # })
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~3879/revisions/9/patch?download&raw";
+          hash = "sha256-Zvht06fqYLQSkUs4Ktljb2BHVGmdvGgv5WYm9hgZ7u0=";
+        })
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841
-        (pkgs.fetchpatch {
-          url = "https://gerrit.lix.systems/changes/lix~3841/revisions/7/patch?download";
-          decode = "base64 --decode";
-          hash = "sha256-HX2co8RAEUdSKsKNb+Fzbhgd3t3hexMJiuoZl9Li6Gw=";
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~3841/revisions/8/patch?download&raw";
+          hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
+          excludes = [ "doc/manual/change-authors.yml" ]; # Conflicts with lix#3879 above
         })
 
         # improve eval speed significantly by enabling parallel gc
         # https://gerrit.lix.systems/c/lix/+/3880
-        (pkgs.fetchpatch {
-          url = "https://gerrit.lix.systems/changes/lix~3880/revisions/1/patch?download";
-          decode = "base64 --decode";
-          hash = "sha256-357bk6yXbRwkkHeukh14QTk0rcNOzmz/zjJTwHdIXI4=";
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~3880/revisions/2/patch?download&raw";
+          hash = "sha256-bJ73Z0boBm92J5LgxS5pPoQqKfz4A8f4R1TGrAaQWhk=";
+          excludes = [ "package.nix" ];
+        })
+
+        # print out derivation attrs with `:p` in repl
+        # https://gerrit.lix.systems/c/lix/+/3842
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~3842/revisions/3/patch?download&raw";
+          hash = "sha256-LUDHeCcm5Lrhlqce+oZ6Xi5NmudUX6C4M6YPRqAUzTw=";
         })
       ];
     };
