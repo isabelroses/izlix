@@ -44,24 +44,17 @@ let
         #  warn when encountering IFD with
         # https://gerrit.lix.systems/c/lix/+/3879
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3879/revisions/9/patch?download&raw";
-          hash = "sha256-Zvht06fqYLQSkUs4Ktljb2BHVGmdvGgv5WYm9hgZ7u0=";
+          url = "https://gerrit.lix.systems/changes/lix~3879/revisions/10/patch?download&raw";
+          hash = "sha256-3h00IuMlFZHWLPs6EfScDlN46+dTB5qrhM6l2Dw1PHI=";
+          excludes = [ "doc/manual/change-authors.yml" ];
         })
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3841/revisions/8/patch?download&raw";
+          url = "https://gerrit.lix.systems/changes/lix~3841/revisions/9/patch?download&raw";
           hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
-          excludes = [ "doc/manual/change-authors.yml" ]; # Conflicts with lix#3879 above
-        })
-
-        # improve eval speed significantly by enabling parallel gc
-        # https://gerrit.lix.systems/c/lix/+/3880
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3880/revisions/2/patch?download&raw";
-          hash = "sha256-bJ73Z0boBm92J5LgxS5pPoQqKfz4A8f4R1TGrAaQWhk=";
-          excludes = [ "package.nix" ];
+          excludes = [ "doc/manual/change-authors.yml" ];
         })
 
         # print out derivation attrs with `:p` in repl
@@ -78,15 +71,9 @@ let
     final: prev: {
       toml11 = final.callPackage ./misc/toml11.nix { };
 
-      boehmgc = (pkgs.boehmgc.override { enableLargeConfig = true; }).overrideAttrs {
-        # Increase the initial mark stack size to avoid stack
-        # overflows, since these inhibit parallel marking (see
-        # GC_mark_some()). To check whether the mark stack is too
-        # small, run Nix with GC_PRINT_STATS=1 and look for messages
-        # such as `Mark stack overflow`, `No room to copy back mark
-        # stack`, and `Grew mark stack to ... frames`.
-        NIX_CFLAGS_COMPILE = "-DINITIAL_MARK_STACK_SIZE=1048576";
-      };
+      boehmgc-nix = (pkgs.boehmgc.override { enableLargeConfig = true; }).overrideAttrs (oa: {
+        NIX_CFLAGS_COMPILE = (oa.NIX_CFLAGS_COMPILE or "") + " -DINITIAL_MARK_STACK_SIZE=1048576";
+      });
 
       lix = prev.lix.overrideAttrs (oa: {
         # Kinda funny right

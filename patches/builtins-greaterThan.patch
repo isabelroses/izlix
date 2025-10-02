@@ -1,7 +1,8 @@
-From 5f1102487d572b5d7acf02ac5358dfbb03d64917 Mon Sep 17 00:00:00 2001
+From f4560bf7bffb539c4a1c0b6d1099fa3bd61423f3 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Mon, 2 Dec 2024 17:47:35 +0000
+Date: Thu, 2 Oct 2025 10:15:21 +0100
 Subject: [PATCH] feat(builtins): greaterThan
+
 ---
  lix/libexpr/builtins/greaterThan.md |  7 +++++++
  lix/libexpr/meson.build             |  1 +
@@ -23,7 +24,7 @@ index 000000000..3bb2787c7
 +`false` otherwise. Evaluation aborts if either *e1* or *e2* does not
 +evaluate to a number.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 9b029e562..5e87a73c7 100644
+index 199b12de4..a07bc152b 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
 @@ -91,6 +91,7 @@ builtin_definitions = files(
@@ -35,10 +36,10 @@ index 9b029e562..5e87a73c7 100644
    'builtins/hasAttr.md',
    'builtins/hasContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 2fae74194..0d87b6fd3 100644
+index eb85ada76..dcbcca2c4 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2217,6 +2217,8 @@ static void prim_genList(EvalState & state, Value * * args, Value & v)
+@@ -2231,6 +2231,8 @@ static void prim_genList(EvalState & state, Value * * args, Value & v)
  
  static void prim_lessThan(EvalState & state, Value * * args, Value & v);
  
@@ -47,10 +48,10 @@ index 2fae74194..0d87b6fd3 100644
  
  static void prim_sort(EvalState & state, Value * * args, Value & v)
  {
-@@ -2243,8 +2245,13 @@ static void prim_sort(EvalState & state, Value * * args, Value & v)
+@@ -2258,8 +2260,13 @@ static void prim_sort(EvalState & state, Value * * args, Value & v)
             should be outside the lambda creation */
          if (args[0]->isPrimOp()) {
-             auto ptr = args[0]->primOp->fun.target<decltype(&prim_lessThan)>();
+             auto ptr = args[0]->primOp()->fun.target<decltype(&prim_lessThan)>();
 -            if (ptr && *ptr == prim_lessThan)
 -                return CompareValues(state, "while evaluating the ordering function passed to builtins.sort")(a, b);
 +            if (ptr) {
@@ -63,7 +64,7 @@ index 2fae74194..0d87b6fd3 100644
          }
  
          Value * vs[] = {a, b};
-@@ -2474,6 +2481,14 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
+@@ -2495,6 +2502,14 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
      v.mkBool(comp(args[0], args[1]));
  }
  
@@ -79,4 +80,5 @@ index 2fae74194..0d87b6fd3 100644
  /*************************************************************
   * String manipulation
 -- 
-2.47.0
+2.50.1
+
