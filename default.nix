@@ -51,11 +51,11 @@ let
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3841/revisions/9/patch?download&raw";
-          hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
-          excludes = [ "doc/manual/change-authors.yml" ];
-        })
+        # (pkgs.fetchpatch2 {
+        #   url = "https://gerrit.lix.systems/changes/lix~3841/revisions/9/patch?download&raw";
+        #   hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
+        #   excludes = [ "doc/manual/change-authors.yml" ];
+        # })
 
         # print out derivation attrs with `:p` in repl
         # https://gerrit.lix.systems/c/lix/+/3842
