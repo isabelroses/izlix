@@ -30,7 +30,7 @@ jobs:
 
       # catfooding lix
       - name: Install Lix
-        uses: DeterminateSystems/nix-installer-action@main
+        uses: DeterminateSystems/nix-installer-action@v20
         with:
           source-url: 'https://install.lix.systems/lix/lix-installer-${{ matrix.system }}'
           logger: pretty
