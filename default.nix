@@ -69,6 +69,12 @@ let
 
   finalScope = scope.overrideScope (
     final: prev: {
+      capnproto = pkgs.capnproto.overrideAttrs (oa: {
+        patches = oa.patches or [ ] ++ [
+          # backport of https://github.com/capnproto/capnproto/pull/1810
+          ./patches/capnproto-promise-nodiscard.patch
+        ];
+      });
 
       boehmgc-nix = (pkgs.boehmgc.override { enableLargeConfig = true; }).overrideAttrs (oa: {
         NIX_CFLAGS_COMPILE = (oa.NIX_CFLAGS_COMPILE or "") + " -DINITIAL_MARK_STACK_SIZE=1048576";
