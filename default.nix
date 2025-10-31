@@ -69,7 +69,6 @@ let
 
   finalScope = scope.overrideScope (
     final: prev: {
-      toml11 = final.callPackage ./misc/toml11.nix { };
 
       boehmgc-nix = (pkgs.boehmgc.override { enableLargeConfig = true; }).overrideAttrs (oa: {
         NIX_CFLAGS_COMPILE = (oa.NIX_CFLAGS_COMPILE or "") + " -DINITIAL_MARK_STACK_SIZE=1048576";
