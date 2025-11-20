@@ -56,13 +56,6 @@ let
         #   hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
         #   excludes = [ "doc/manual/change-authors.yml" ];
         # })
-
-        # print out derivation attrs with `:p` in repl
-        # https://gerrit.lix.systems/c/lix/+/3842
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3842/revisions/3/patch?download&raw";
-          hash = "sha256-LUDHeCcm5Lrhlqce+oZ6Xi5NmudUX6C4M6YPRqAUzTw=";
-        })
       ];
     };
   };
