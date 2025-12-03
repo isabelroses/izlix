@@ -69,10 +69,6 @@ let
         ];
       });
 
-      boehmgc-nix = (pkgs.boehmgc.override { enableLargeConfig = true; }).overrideAttrs (oa: {
-        NIX_CFLAGS_COMPILE = (oa.NIX_CFLAGS_COMPILE or "") + " -DINITIAL_MARK_STACK_SIZE=1048576";
-      });
-
       lix = prev.lix.overrideAttrs (oa: {
         # Kinda funny right
         # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
