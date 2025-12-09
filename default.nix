@@ -43,11 +43,12 @@ let
         #
         #  warn when encountering IFD with
         # https://gerrit.lix.systems/c/lix/+/3879
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~3879/revisions/10/patch?download&raw";
-          hash = "sha256-3h00IuMlFZHWLPs6EfScDlN46+dTB5qrhM6l2Dw1PHI=";
-          excludes = [ "doc/manual/change-authors.yml" ];
-        })
+        # (pkgs.fetchpatch2 {
+        #   name = "warn-import-from-derivation";
+        #   url = "https://gerrit.lix.systems/changes/lix~3879/revisions/10/patch?download&raw";
+        #   hash = "sha256-3h00IuMlFZHWLPs6EfScDlN46+dTB5qrhM6l2Dw1PHI=";
+        #   excludes = [ "doc/manual/change-authors.yml" ];
+        # })
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841
