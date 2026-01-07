@@ -80,6 +80,11 @@ let
 
         # these are flakey
         doInstallCheck = false;
+
+        nativeBuildInputs = oa.nativeBuildInputs or [ ] ++ [
+          # fixes https://github.com/isabelroses/izlix/actions/runs/20767364744/job/59636260900
+          pkgs.rust-cbindgen
+        ];
       });
     }
   );
