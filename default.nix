@@ -14,7 +14,9 @@ let
     attrName = "izlix";
 
     lix-args = {
-      version = "2.94.0-pre-${builtins.substring 0 7 sourceInfo.src.rev}";
+      version = "2.95.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
+        builtins.substring 0 12 sourceInfo.src.rev
+      }";
       inherit (sourceInfo) src cargoDeps;
 
       patches = [
