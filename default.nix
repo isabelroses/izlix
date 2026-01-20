@@ -70,7 +70,7 @@ let
         ];
       });
 
-      lix = prev.lix.overrideAttrs (oa: {
+      lix = (prev.lix.override { withAWS = false; }).overrideAttrs (oa: {
         # Kinda funny right
         # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
         postPatch = oa.postPatch or "" + ''
