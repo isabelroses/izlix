@@ -13,8 +13,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "lix-project";
     repo = "lix";
-    rev = "cb34b56feab947992d8183fd1056170d488158d0";
-    hash = "sha256-DXYZIBQaUeBHATHvbXDihvUgcudjMksfC3xag14UTjo=";
+    rev = "2f7644c42096a6dca25aabf7e16e4a54bb50f250";
+    hash = "sha256-kXNZSUcFP3/MenNNkzwkPcsTycEUuuN9RxuHuDgntVs=";
   };
 
   cargoDeps = rustPlatform.fetchCargoVendor {
