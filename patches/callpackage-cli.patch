@@ -1,17 +1,19 @@
-From 362f8a5f7930056e2f8a659df211c67cd272bab2 Mon Sep 17 00:00:00 2001
+From 7457ef3486768734fbfcb66e3476dd92faea737a Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Mon, 6 Oct 2025 09:12:02 +0100
+Date: Wed, 25 Feb 2026 17:21:23 +0000
 Subject: [PATCH] feat(cli): add callPackage flag
 
 adds a --call-package or -C cli option to build a package from the cli
 based on the work of https://github.com/privatevoid-net/nix-super
+
+Change-Id: Ib07b599a21e1e31d0cc4e0a4c395bfc7cf219f78
 ---
  lix/libcmd/command.hh      |  1 +
- lix/libcmd/installables.cc | 25 +++++++++++++++++++++----
- 2 files changed, 22 insertions(+), 4 deletions(-)
+ lix/libcmd/installables.cc | 31 ++++++++++++++++++++++++++-----
+ 2 files changed, 27 insertions(+), 5 deletions(-)
 
 diff --git a/lix/libcmd/command.hh b/lix/libcmd/command.hh
-index da8cc4934..20cd7e033 100644
+index 85c2269aa..5c774bc0a 100644
 --- a/lix/libcmd/command.hh
 +++ b/lix/libcmd/command.hh
 @@ -112,6 +112,7 @@ struct SourceExprCommand : virtual Args, MixFlakeOptions
@@ -23,7 +25,7 @@ index da8cc4934..20cd7e033 100644
      SourceExprCommand();
  
 diff --git a/lix/libcmd/installables.cc b/lix/libcmd/installables.cc
-index a18323f69..987020ef1 100644
+index 03a6556fe..dbf7a2dd5 100644
 --- a/lix/libcmd/installables.cc
 +++ b/lix/libcmd/installables.cc
 @@ -166,6 +166,19 @@ SourceExprCommand::SourceExprCommand()
@@ -31,22 +33,22 @@ index a18323f69..987020ef1 100644
          .handler = {&expr}
      });
 +
-+    addFlag({
-+        .longName = "call-package",
-+        .shortName = 'C',
-+        .description =
-+            "Interpret [*installables*](@docroot@/command-ref/new-cli/nix.md#installables) as attribute paths relative to the callPackageable Nix expression stored in *file*. "
-+            "The `callPackage` function is taken from `<nixpkgs>`. "
-+            "Implies `--impure`.",
-+        .category = installablesCategory,
-+        .labels = {"file"},
-+        .handler = {&callPackageFile},
-+        .completer = completePath
-+    });
++    addFlag(
++        {.longName = "call-package",
++         .shortName = 'C',
++         .description = "Interpret [*installables*](@docroot@/command-ref/new-cli/nix.md#installables) as "
++                        "attribute paths relative to the callPackageable Nix expression stored in *file*. "
++                        "The `callPackage` function is taken from `<nixpkgs>`. "
++                        "Implies `--impure`.",
++         .category = installablesCategory,
++         .labels = {"file"},
++         .handler = {&callPackageFile},
++         .completer = completePath}
++    );
  }
  
  MixReadOnlyOption::MixReadOnlyOption()
-@@ -432,7 +445,7 @@ ref<eval_cache::EvalCache> openEvalCache(
+@@ -431,7 +444,7 @@ ref<eval_cache::EvalCache> openEvalCache(
  ref<eval_cache::CachingEvaluator> SourceExprCommand::getEvaluator()
  {
      // FIXME: backward compatibility hack
@@ -55,7 +57,7 @@ index a18323f69..987020ef1 100644
          evalSettings.pureEval.override(false);
      }
  
-@@ -444,9 +457,9 @@ Installables SourceExprCommand::parseInstallables(
+@@ -443,9 +456,10 @@ Installables SourceExprCommand::parseInstallables(
  {
      Installables result;
  
@@ -63,22 +65,28 @@ index a18323f69..987020ef1 100644
 -        if (file && expr)
 -            throw UsageError("'--file' and '--expr' are exclusive");
 +    if (file || expr || callPackageFile) {
-+        if ((file && expr) || (file && callPackageFile) || (expr && callPackageFile))
++        if ((file && expr) || (file && callPackageFile) || (expr && callPackageFile)) {
 +            throw UsageError("'--file', '--expr' and '--call-package' are exclusive");
++        }
  
          auto evaluator = getEvaluator();
          Value vFile;
-@@ -457,6 +470,10 @@ Installables SourceExprCommand::parseInstallables(
+@@ -456,7 +470,14 @@ Installables SourceExprCommand::parseInstallables(
          }
          else if (file)
              state.evalFile(state.aio.blockOn(lookupFileArg(*evaluator, *file)).unwrap(), vFile);
+-        else {
 +        else if (callPackageFile) {
-+            auto & e = evaluator->parseExprFromString(fmt("(import <nixpkgs> {}).callPackage %s {}", state.aio.blockOn(lookupFileArg(*evaluator, *callPackageFile)).unwrap()), CanonPath::fromCwd());
++            auto & e = evaluator->parseExprFromString(
++                fmt("(import <nixpkgs> {}).callPackage %s {}",
++                    state.aio.blockOn(lookupFileArg(*evaluator, *callPackageFile)).unwrap()),
++                CanonPath::fromCwd()
++            );
 +            state.eval(e, vFile);
-+        }
-         else {
++        } else {
              auto & e = evaluator->parseExprFromString(*expr, CanonPath::fromCwd());
-             state.eval(e, vFile);
+             vFile = state.eval(e);
+         }
 -- 
-2.51.0
+2.51.2
 

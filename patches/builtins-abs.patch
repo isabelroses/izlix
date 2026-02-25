@@ -1,12 +1,14 @@
-From 6e7306960bd9279c70fe2aa2056c22f79a9dc4ca Mon Sep 17 00:00:00 2001
+From 972ab8cc190aa990dc52cda7473af5fd4c14e984 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Mon, 2 Dec 2024 22:13:10 +0000
+Date: Wed, 25 Feb 2026 17:16:59 +0000
 Subject: [PATCH] feat(builtins): abs
+
+Change-Id: I3650878744f38a4bc791fe3119e2038503a63dc8
 ---
  lix/libexpr/builtins/abs.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
- lix/libexpr/primops.cc      | 10 ++++++++++
- 3 files changed, 16 insertions(+)
+ lix/libexpr/primops.cc      | 19 +++++++++++++++++++
+ 3 files changed, 25 insertions(+)
  create mode 100644 lix/libexpr/builtins/abs.md
 
 diff --git a/lix/libexpr/builtins/abs.md b/lix/libexpr/builtins/abs.md
@@ -21,37 +23,47 @@ index 000000000..6c8ab27a2
 +---
 +Return the absolute value of the number *e*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 9b029e562..f2a808965 100644
+index 0552dff2c..692c63867 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -49,6 +49,7 @@ libexpr_settings_header = custom_target(
+@@ -51,6 +51,7 @@ liblix_generated_headers += custom_target(
  builtin_definitions = files(
    # keep-sorted start
    'builtins/abort.md',
 +  'builtins/abs.md',
    'builtins/add.md',
    'builtins/addDrvOutputDependencies.md',
-   'builtins/all.md',
+   'builtins/addErrorContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 2fae74194..32e090d4c 100644
+index 89b398a59..8a0c81ddd 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2466,6 +2466,16 @@ static void prim_bitXor(EvalState & state, Value * * args, Value & v)
-     v.mkInt(i1.value ^ i2.value);
+@@ -2699,6 +2699,25 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
+     v = {NewValueAs::boolean, comp(*args[0], *args[1])};
  }
  
-+static void prim_abs(EvalState & state, Value * * args, Value & v)
++static void prim_abs(EvalState & state, Value ** args, Value & v)
 +{
 +    state.forceValue(*args[0], noPos);
-+    if (args[0]->type() == nFloat)
-+        v.mkFloat(std::abs(state.forceFloat(*args[0], noPos, "while evaluating the argument passed to builtins.abs")));
-+    else {
-+        v.mkInt(std::abs(state.forceInt(*args[0], noPos, "while evaluating the argument passed to builtins.abs").value));
++    if (args[0]->type() == nFloat) {
++        v = {
++            NewValueAs::floating,
++            std::abs(
++                state.forceFloat(*args[0], noPos, "while evaluating the argument passed to builtins.abs")
++            )
++        };
++    } else {
++        v = {
++            NewValueAs::integer,
++            std::abs(
++                state.forceInt(*args[0], noPos, "while evaluating the argument passed to builtins.abs").value
++            )
++        };
 +    }
 +}
-+
- static void prim_lessThan(EvalState & state, Value * * args, Value & v)
- {
-     state.forceValue(*args[0], noPos);
+ 
+ /*************************************************************
+  * String manipulation
 -- 
-2.47.0
+2.51.2
+
