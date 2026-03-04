@@ -1,14 +1,14 @@
-From 0b2944043b71e53bc2182e28d3b4f7308e67a6a7 Mon Sep 17 00:00:00 2001
+From 70dd1f7bb40c8d3e53b4166b53e404711c67a8ba Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 25 Feb 2026 17:24:50 +0000
+Date: Wed, 4 Mar 2026 14:57:47 +0000
 Subject: [PATCH] feat(builtins): greaterThan
 
-Change-Id: I9535908229788145338cacbdc4e54c89b33887cd
+Change-Id: Ifdac5f46e2b494b34e21eda40061e51ffcdea558
 ---
  lix/libexpr/builtins/greaterThan.md |  7 +++++++
  lix/libexpr/meson.build             |  1 +
- lix/libexpr/primops.cc              | 18 ++++++++++++++++--
- 3 files changed, 24 insertions(+), 2 deletions(-)
+ lix/libexpr/primops.cc              | 17 +++++++++++++++--
+ 3 files changed, 23 insertions(+), 2 deletions(-)
  create mode 100644 lix/libexpr/builtins/greaterThan.md
 
 diff --git a/lix/libexpr/builtins/greaterThan.md b/lix/libexpr/builtins/greaterThan.md
@@ -37,10 +37,10 @@ index 0552dff2c..910f7ad81 100644
    'builtins/hasAttr.md',
    'builtins/hasContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 89b398a59..e6aea8e53 100644
+index d2501c26a..3e0aff048 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2418,6 +2418,7 @@ static void prim_genList(EvalState & state, Value * * args, Value & v)
+@@ -2437,6 +2437,7 @@ static void prim_genList(EvalState & state, Value * * args, Value & v)
  
  static void prim_lessThan(EvalState & state, Value * * args, Value & v);
  
@@ -48,7 +48,7 @@ index 89b398a59..e6aea8e53 100644
  
  static void prim_sort(EvalState & state, Value * * args, Value & v)
  {
-@@ -2445,8 +2446,14 @@ static void prim_sort(EvalState & state, Value * * args, Value & v)
+@@ -2464,8 +2465,13 @@ static void prim_sort(EvalState & state, Value * * args, Value & v)
             should be outside the lambda creation */
          if (args[0]->isPrimOp()) {
              auto ptr = args[0]->primOp()->fun.target<decltype(&prim_lessThan)>();
@@ -61,11 +61,10 @@ index 89b398a59..e6aea8e53 100644
 +                    return CompareValues(state, "while evaluating the ordering function passed to builtins.sort")(b, a);
 +                }
 +            }
-+        }
          }
  
          Value vs[] = {a, b};
-@@ -2699,6 +2706,13 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
+@@ -2718,6 +2724,13 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
      v = {NewValueAs::boolean, comp(*args[0], *args[1])};
  }
  

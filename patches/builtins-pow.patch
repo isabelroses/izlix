@@ -51,7 +51,7 @@ index 89b398a59..3094eb8b2 100644
 +        state.forceFloat(*args[0], noPos, "while evaluating the first operand of the exponentiation");
 +    NixFloat f2 =
 +        state.forceFloat(*args[1], noPos, "while evaluating the second operand of the exponentiation");
-+    v = {NewValueAs::floating, std::pow(f1, f2};
++    v = {NewValueAs::floating, std::pow(f1, f2)};
 +}
 +
  static void prim_bitAnd(EvalState & state, Value * * args, Value & v)

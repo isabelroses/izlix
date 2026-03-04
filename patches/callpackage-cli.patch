@@ -1,12 +1,12 @@
-From 7457ef3486768734fbfcb66e3476dd92faea737a Mon Sep 17 00:00:00 2001
+From aa4154e09a76718d7ae584e5920cc022f23bc1b9 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 25 Feb 2026 17:21:23 +0000
+Date: Wed, 4 Mar 2026 15:07:02 +0000
 Subject: [PATCH] feat(cli): add callPackage flag
 
 adds a --call-package or -C cli option to build a package from the cli
 based on the work of https://github.com/privatevoid-net/nix-super
 
-Change-Id: Ib07b599a21e1e31d0cc4e0a4c395bfc7cf219f78
+Change-Id: Ie766b74f21f8276e2c4d78d8d1a5aeceeccbe8da
 ---
  lix/libcmd/command.hh      |  1 +
  lix/libcmd/installables.cc | 31 ++++++++++++++++++++++++++-----
@@ -25,7 +25,7 @@ index 85c2269aa..5c774bc0a 100644
      SourceExprCommand();
  
 diff --git a/lix/libcmd/installables.cc b/lix/libcmd/installables.cc
-index 03a6556fe..dbf7a2dd5 100644
+index fddc7f834..72b016caf 100644
 --- a/lix/libcmd/installables.cc
 +++ b/lix/libcmd/installables.cc
 @@ -166,6 +166,19 @@ SourceExprCommand::SourceExprCommand()
@@ -48,7 +48,7 @@ index 03a6556fe..dbf7a2dd5 100644
  }
  
  MixReadOnlyOption::MixReadOnlyOption()
-@@ -431,7 +444,7 @@ ref<eval_cache::EvalCache> openEvalCache(
+@@ -429,7 +442,7 @@ ref<eval_cache::EvalCache> openEvalCache(
  ref<eval_cache::CachingEvaluator> SourceExprCommand::getEvaluator()
  {
      // FIXME: backward compatibility hack
@@ -57,7 +57,7 @@ index 03a6556fe..dbf7a2dd5 100644
          evalSettings.pureEval.override(false);
      }
  
-@@ -443,9 +456,10 @@ Installables SourceExprCommand::parseInstallables(
+@@ -441,9 +454,10 @@ Installables SourceExprCommand::parseInstallables(
  {
      Installables result;
  
@@ -71,10 +71,10 @@ index 03a6556fe..dbf7a2dd5 100644
  
          auto evaluator = getEvaluator();
          Value vFile;
-@@ -456,7 +470,14 @@ Installables SourceExprCommand::parseInstallables(
+@@ -454,7 +468,14 @@ Installables SourceExprCommand::parseInstallables(
          }
          else if (file)
-             state.evalFile(state.aio.blockOn(lookupFileArg(*evaluator, *file)).unwrap(), vFile);
+             vFile = state.evalFile(state.aio.blockOn(lookupFileArg(*evaluator, *file)).unwrap());
 -        else {
 +        else if (callPackageFile) {
 +            auto & e = evaluator->parseExprFromString(
@@ -82,7 +82,7 @@ index 03a6556fe..dbf7a2dd5 100644
 +                    state.aio.blockOn(lookupFileArg(*evaluator, *callPackageFile)).unwrap()),
 +                CanonPath::fromCwd()
 +            );
-+            state.eval(e, vFile);
++            vFile = state.eval(e);
 +        } else {
              auto & e = evaluator->parseExprFromString(*expr, CanonPath::fromCwd());
              vFile = state.eval(e);
