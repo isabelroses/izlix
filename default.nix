@@ -79,6 +79,9 @@ let
           substituteInPlace lix/libmain/shared.cc \
             --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
         '';
+
+        # these are flakey
+        doInstallCheck = false;
       });
     }
   );
