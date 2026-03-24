@@ -14,7 +14,7 @@ let
     attrName = "izlix";
 
     lix-args = {
-      version = "2.95.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
+      version = "2.96.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
         builtins.substring 0 12 sourceInfo.src.rev
       }";
       inherit (sourceInfo) src cargoDeps;
@@ -79,15 +79,6 @@ let
           substituteInPlace lix/libmain/shared.cc \
             --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
         '';
-
-        # these are flakey
-        doInstallCheck = false;
-
-        nativeBuildInputs = oa.nativeBuildInputs or [ ] ++ [
-          # fixes https://github.com/isabelroses/izlix/actions/runs/20767364744/job/59636260900
-          pkgs.rust-cbindgen
-          pkgs.curl
-        ];
       });
     }
   );

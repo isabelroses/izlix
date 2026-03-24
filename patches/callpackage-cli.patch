@@ -1,16 +1,16 @@
-From aa4154e09a76718d7ae584e5920cc022f23bc1b9 Mon Sep 17 00:00:00 2001
+From 338dc61779c28540bd20264f1350d323d49bd253 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 4 Mar 2026 15:07:02 +0000
+Date: Tue, 24 Mar 2026 11:00:32 +0000
 Subject: [PATCH] feat(cli): add callPackage flag
 
 adds a --call-package or -C cli option to build a package from the cli
 based on the work of https://github.com/privatevoid-net/nix-super
 
-Change-Id: Ie766b74f21f8276e2c4d78d8d1a5aeceeccbe8da
+Change-Id: Ib115918acb3942193af831f68e1f6b7fa0a815c6
 ---
  lix/libcmd/command.hh      |  1 +
- lix/libcmd/installables.cc | 31 ++++++++++++++++++++++++++-----
- 2 files changed, 27 insertions(+), 5 deletions(-)
+ lix/libcmd/installables.cc | 29 +++++++++++++++++++++++++----
+ 2 files changed, 26 insertions(+), 4 deletions(-)
 
 diff --git a/lix/libcmd/command.hh b/lix/libcmd/command.hh
 index 85c2269aa..5c774bc0a 100644
@@ -25,7 +25,7 @@ index 85c2269aa..5c774bc0a 100644
      SourceExprCommand();
  
 diff --git a/lix/libcmd/installables.cc b/lix/libcmd/installables.cc
-index fddc7f834..72b016caf 100644
+index da0e53d72..29d93fa5e 100644
 --- a/lix/libcmd/installables.cc
 +++ b/lix/libcmd/installables.cc
 @@ -166,6 +166,19 @@ SourceExprCommand::SourceExprCommand()
@@ -70,23 +70,21 @@ index fddc7f834..72b016caf 100644
 +        }
  
          auto evaluator = getEvaluator();
-         Value vFile;
-@@ -454,7 +468,14 @@ Installables SourceExprCommand::parseInstallables(
-         }
-         else if (file)
-             vFile = state.evalFile(state.aio.blockOn(lookupFileArg(*evaluator, *file)).unwrap());
--        else {
-+        else if (callPackageFile) {
-+            auto & e = evaluator->parseExprFromString(
-+                fmt("(import <nixpkgs> {}).callPackage %s {}",
-+                    state.aio.blockOn(lookupFileArg(*evaluator, *callPackageFile)).unwrap()),
-+                CanonPath::fromCwd()
-+            );
-+            vFile = state.eval(e);
-+        } else {
-             auto & e = evaluator->parseExprFromString(*expr, CanonPath::fromCwd());
-             vFile = state.eval(e);
-         }
+ 
+@@ -453,6 +467,13 @@ Installables SourceExprCommand::parseInstallables(
+                 return state.eval(e);
+             } else if (file) {
+                 return state.evalFile(state.aio.blockOn(lookupFileArg(*evaluator, *file)).unwrap());
++            } else if (callPackageFile) {
++                auto & e = evaluator->parseExprFromString(
++                    fmt("(import <nixpkgs> {}).callPackage %s {}",
++                        state.aio.blockOn(lookupFileArg(*evaluator, *callPackageFile)).unwrap()),
++                    CanonPath::fromCwd()
++                );
++                return state.eval(e);
+             } else {
+                 auto & e = evaluator->parseExprFromString(*expr, CanonPath::fromCwd());
+                 return state.eval(e);
 -- 
 2.51.2
 
