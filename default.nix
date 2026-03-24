@@ -83,6 +83,22 @@ let
         # these are flakey
         doInstallCheck = false;
       });
+
+      nil = prev.nil.overrideAttrs (
+        finalAttrs: _: {
+          src = pkgs.fetchFromGitHub {
+            owner = "oxalica";
+            repo = "nil";
+            rev = "504599f7e555a249d6754698473124018b80d121";
+            hash = "sha256-18j8X2Nbe0Wg1+7YrWRlYzmjZ5Wq0NCVwJHJlBIw/dc=";
+          };
+
+          cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+            inherit (finalAttrs) src;
+            hash = "sha256-LS2IW4gZ1k6Xl5weMNwxvVA2z56r4rPkjqrkROZTmBw=";
+          };
+        }
+      );
     }
   );
 in
