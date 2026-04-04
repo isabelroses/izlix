@@ -1,0 +1,26 @@
+From 6626de9ae10d5a8397f4edebc717e39e59872c7c Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sat, 4 Apr 2026 23:43:23 +0100
+Subject: [PATCH] build: use minalloc
+
+based on pr nix#15596
+---
+ meson.build | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/meson.build b/meson.build
+index fc2e348ea..41eb33330 100644
+--- a/meson.build
++++ b/meson.build
+@@ -378,6 +378,8 @@ editline = dependency('libeditline', 'editline', version : '>=1.14', required :
+ 
+ lowdown = dependency('lowdown', version : '>=1.4.0', required : true, include_type : 'system')
+ 
++mimalloc = dependency('mimalloc', required : true, include_type: 'system')
++
+ # TODO(sterni): drop the corresponding #ifdef after NixOS 25.11 is EOL which still distributes lowdown < 3.0.0
+ if lowdown.version().version_compare('>= 3.0.0')
+   add_project_arguments('-DLOWDOWN_CONSOLIDATED_OFLAGS', language: 'cpp')
+-- 
+2.53.0
+

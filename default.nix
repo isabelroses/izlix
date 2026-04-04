@@ -41,6 +41,10 @@ let
         # - `builtins.mod` will return the remainder of the first argument divided by the second
         ./patches/builtins-mod.patch
 
+        # build against minalloc. port of
+        # <https://github.com/NixOS/nix/pull/15596> for lix
+        ./patches/build-use-minalloc.patch
+
         # the bellow two patches conflict with each other
         #
         #  warn when encountering IFD with
@@ -79,6 +83,9 @@ let
           substituteInPlace lix/libmain/shared.cc \
             --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
         '';
+
+        # for build minalloc patch
+        buildInputs = oa.buildInputs ++ [ pkgs.mimalloc ];
 
         # these are flakey
         doInstallCheck = false;
