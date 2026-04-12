@@ -1,9 +1,7 @@
-From 6bffab4164bfd8f70f74151e4e698792005b6480 Mon Sep 17 00:00:00 2001
+From c1a4f91d39063a8311e7278abec0ab1f4b9f5c86 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 25 Feb 2026 17:26:55 +0000
+Date: Sun, 12 Apr 2026 12:30:47 +0100
 Subject: [PATCH] feat(builtins): pow
-
-Change-Id: I07a086095640d4ff43aa03ce753263789e96ab5e
 ---
  lix/libexpr/builtins/pow.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -23,10 +21,10 @@ index 000000000..4a21084b9
 +---
 +Return the result of *e1* to the power of *e2*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 0552dff2c..feceb3922 100644
+index fff97b8f7..3464d27f3 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -126,6 +126,7 @@ builtin_definitions = files(
+@@ -127,6 +127,7 @@ builtin_definitions = files(
    'builtins/path.md',
    'builtins/pathExists.md',
    'builtins/placeholder.md',
@@ -35,14 +33,14 @@ index 0552dff2c..feceb3922 100644
    'builtins/readFile.md',
    'builtins/readFileType.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 89b398a59..3094eb8b2 100644
+index 1237ad7ae..b5ff1168a 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2668,6 +2668,18 @@ static void prim_div(EvalState & state, Value * * args, Value & v)
+@@ -2710,6 +2710,18 @@ static Value prim_div(EvalState & state, Value ** args)
      }
  }
  
-+static void prim_pow(EvalState & state, Value ** args, Value & v)
++static Value prim_pow(EvalState & state, Value ** args)
 +{
 +    state.forceValue(*args[0], noPos);
 +    state.forceValue(*args[1], noPos);
@@ -51,10 +49,10 @@ index 89b398a59..3094eb8b2 100644
 +        state.forceFloat(*args[0], noPos, "while evaluating the first operand of the exponentiation");
 +    NixFloat f2 =
 +        state.forceFloat(*args[1], noPos, "while evaluating the second operand of the exponentiation");
-+    v = {NewValueAs::floating, std::pow(f1, f2)};
++    return {NewValueAs::floating, std::pow(f1, f2)};
 +}
 +
- static void prim_bitAnd(EvalState & state, Value * * args, Value & v)
+ static Value prim_bitAnd(EvalState & state, Value ** args)
  {
      auto i1 = state.forceInt(*args[0], noPos, "while evaluating the first argument passed to builtins.bitAnd");
 -- 

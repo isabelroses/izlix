@@ -1,14 +1,12 @@
-From 70dd1f7bb40c8d3e53b4166b53e404711c67a8ba Mon Sep 17 00:00:00 2001
+From da7660c0fb1901393c6ecafd22fbe9431f68f03f Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 4 Mar 2026 14:57:47 +0000
+Date: Sun, 12 Apr 2026 12:03:43 +0100
 Subject: [PATCH] feat(builtins): greaterThan
-
-Change-Id: Ifdac5f46e2b494b34e21eda40061e51ffcdea558
 ---
  lix/libexpr/builtins/greaterThan.md |  7 +++++++
  lix/libexpr/meson.build             |  1 +
- lix/libexpr/primops.cc              | 17 +++++++++++++++--
- 3 files changed, 23 insertions(+), 2 deletions(-)
+ lix/libexpr/primops.cc              | 20 ++++++++++++++++++--
+ 3 files changed, 26 insertions(+), 2 deletions(-)
  create mode 100644 lix/libexpr/builtins/greaterThan.md
 
 diff --git a/lix/libexpr/builtins/greaterThan.md b/lix/libexpr/builtins/greaterThan.md
@@ -25,10 +23,10 @@ index 000000000..3bb2787c7
 +`false` otherwise. Evaluation aborts if either *e1* or *e2* does not
 +evaluate to a number.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 0552dff2c..910f7ad81 100644
+index fff97b8f7..4f6d46c8a 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -96,6 +96,7 @@ builtin_definitions = files(
+@@ -97,6 +97,7 @@ builtin_definitions = files(
    'builtins/getContext.md',
    'builtins/getEnv.md',
    'builtins/getFlake.md',
@@ -37,18 +35,19 @@ index 0552dff2c..910f7ad81 100644
    'builtins/hasAttr.md',
    'builtins/hasContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index d2501c26a..3e0aff048 100644
+index 1237ad7ae..a95344bd6 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2437,6 +2437,7 @@ static void prim_genList(EvalState & state, Value * * args, Value & v)
+@@ -2464,6 +2464,8 @@ static Value prim_genList(EvalState & state, Value ** args)
  
- static void prim_lessThan(EvalState & state, Value * * args, Value & v);
+ static Value prim_lessThan(EvalState & state, Value ** args);
  
-+static void prim_greaterThan(EvalState & state, Value ** args, Value & v);
- 
- static void prim_sort(EvalState & state, Value * * args, Value & v)
++static Value prim_greaterThan(EvalState & state, Value ** args);
++
+ static Value prim_sort(EvalState & state, Value ** args)
  {
-@@ -2464,8 +2465,13 @@ static void prim_sort(EvalState & state, Value * * args, Value & v)
+     state.forceList(*args[1], noPos, "while evaluating the second argument passed to builtins.sort");
+@@ -2488,8 +2490,13 @@ static Value prim_sort(EvalState & state, Value ** args)
             should be outside the lambda creation */
          if (args[0]->isPrimOp()) {
              auto ptr = args[0]->primOp()->fun.target<decltype(&prim_lessThan)>();
@@ -64,20 +63,22 @@ index d2501c26a..3e0aff048 100644
          }
  
          Value vs[] = {a, b};
-@@ -2718,6 +2724,13 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
-     v = {NewValueAs::boolean, comp(*args[0], *args[1])};
+@@ -2741,6 +2748,15 @@ static Value prim_lessThan(EvalState & state, Value ** args)
+     return {NewValueAs::boolean, comp(*args[0], *args[1])};
  }
  
-+static void prim_greaterThan(EvalState & state, Value ** args, Value & v)
++static Value prim_greaterThan(EvalState & state, Value ** args)
 +{
 +    state.forceValue(*args[0], noPos);
 +    state.forceValue(*args[1], noPos);
 +    CompareValues comp(state, "");
-+    v = {NewValueAs::boolean, comp(*args[1], *args[0])};
++    return {NewValueAs::boolean, comp(*args[1], *args[0])};
 +}
++
++
  
  /*************************************************************
   * String manipulation
 -- 
-2.51.2
+2.53.0
 

@@ -5,8 +5,6 @@ Subject: [PATCH] feat(cli): add callPackage flag
 
 adds a --call-package or -C cli option to build a package from the cli
 based on the work of https://github.com/privatevoid-net/nix-super
-
-Change-Id: Ib115918acb3942193af831f68e1f6b7fa0a815c6
 ---
  lix/libcmd/command.hh      |  1 +
  lix/libcmd/installables.cc | 29 +++++++++++++++++++++++++----

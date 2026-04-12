@@ -1,9 +1,7 @@
-From 972ab8cc190aa990dc52cda7473af5fd4c14e984 Mon Sep 17 00:00:00 2001
+From b1ab4290701525fcdab2a07c09f13d070ddd1c0e Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 25 Feb 2026 17:16:59 +0000
+Date: Sun, 12 Apr 2026 12:26:58 +0100
 Subject: [PATCH] feat(builtins): abs
-
-Change-Id: I3650878744f38a4bc791fe3119e2038503a63dc8
 ---
  lix/libexpr/builtins/abs.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -23,10 +21,10 @@ index 000000000..6c8ab27a2
 +---
 +Return the absolute value of the number *e*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 0552dff2c..692c63867 100644
+index fff97b8f7..3f53d676a 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -51,6 +51,7 @@ liblix_generated_headers += custom_target(
+@@ -52,6 +52,7 @@ liblix_generated_headers += custom_target(
  builtin_definitions = files(
    # keep-sorted start
    'builtins/abort.md',
@@ -35,25 +33,25 @@ index 0552dff2c..692c63867 100644
    'builtins/addDrvOutputDependencies.md',
    'builtins/addErrorContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 89b398a59..8a0c81ddd 100644
+index 1237ad7ae..785a89071 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2699,6 +2699,25 @@ static void prim_lessThan(EvalState & state, Value * * args, Value & v)
-     v = {NewValueAs::boolean, comp(*args[0], *args[1])};
+@@ -2741,6 +2741,25 @@ static Value prim_lessThan(EvalState & state, Value ** args)
+     return {NewValueAs::boolean, comp(*args[0], *args[1])};
  }
  
-+static void prim_abs(EvalState & state, Value ** args, Value & v)
++static Value prim_abs(EvalState & state, Value ** args)
 +{
 +    state.forceValue(*args[0], noPos);
 +    if (args[0]->type() == nFloat) {
-+        v = {
++        return {
 +            NewValueAs::floating,
 +            std::abs(
 +                state.forceFloat(*args[0], noPos, "while evaluating the argument passed to builtins.abs")
 +            )
 +        };
 +    } else {
-+        v = {
++        return {
 +            NewValueAs::integer,
 +            std::abs(
 +                state.forceInt(*args[0], noPos, "while evaluating the argument passed to builtins.abs").value

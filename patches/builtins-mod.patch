@@ -1,9 +1,7 @@
-From 23051ae34885d47a54e706ebcad33e0b4371bbaf Mon Sep 17 00:00:00 2001
+From e8259d59a94778a564285ac8f354b6902836f71e Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
-Date: Wed, 25 Feb 2026 17:18:49 +0000
+Date: Sun, 12 Apr 2026 12:29:15 +0100
 Subject: [PATCH] feat(builtins): mod
-
-Change-Id: I2debcd8a9542c57093510fd5ca1f0d3051eb8aa7
 ---
  lix/libexpr/builtins/mod.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -23,10 +21,10 @@ index 000000000..7833f9e32
 +---
 +Returns the result is the remainder of *e1* divided by *e2*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index 0552dff2c..ad46cfdd1 100644
+index fff97b8f7..9b3c1ceda 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -119,6 +119,7 @@ builtin_definitions = files(
+@@ -120,6 +120,7 @@ builtin_definitions = files(
    'builtins/map.md',
    'builtins/mapAttrs.md',
    'builtins/match.md',
@@ -35,14 +33,14 @@ index 0552dff2c..ad46cfdd1 100644
    'builtins/parseDrvName.md',
    'builtins/parseFlakeRef.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 89b398a59..5e97631c3 100644
+index 1237ad7ae..74bcd337a 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2668,6 +2668,21 @@ static void prim_div(EvalState & state, Value * * args, Value & v)
+@@ -2710,6 +2710,21 @@ static Value prim_div(EvalState & state, Value ** args)
      }
  }
  
-+static void prim_mod(EvalState & state, Value ** args, Value & v)
++static Value prim_mod(EvalState & state, Value ** args)
 +{
 +    int i2 =
 +        state.forceInt(*args[1], noPos, "while evaluating the second operand of the modulo operation").value;
@@ -54,10 +52,10 @@ index 89b398a59..5e97631c3 100644
 +    int i1 =
 +        state.forceInt(*args[0], noPos, "while evaluating the first operand of the modulo operation").value;
 +
-+    v = {NewValueAs::integer, i1 % i2};
++    return {NewValueAs::integer, i1 % i2};
 +}
 +
- static void prim_bitAnd(EvalState & state, Value * * args, Value & v)
+ static Value prim_bitAnd(EvalState & state, Value ** args)
  {
      auto i1 = state.forceInt(*args[0], noPos, "while evaluating the first argument passed to builtins.bitAnd");
 -- 
