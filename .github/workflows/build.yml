@@ -43,14 +43,10 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - name: Setup Attic
-        uses: ryanccn/attic-action@v0.4.0
+      - uses: cachix/cachix-action@v17
         with:
-          inputs-from: flake.lock
-          endpoint: https://cache.tgirl.cloud
-          cache: tgirlcloud
-          token: ${{ secrets.ATTIC_TOKEN }}
-          exclude-paths: "-(vendor|source|patch)$"
+          name: isabelroses
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
       # this will build lix and its dependencies, and then build nix-fast-build
       # following that we can then use nix-fast-build to build the rest of the
