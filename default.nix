@@ -63,6 +63,26 @@ let
         #   hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
         #   excludes = [ "doc/manual/change-authors.yml" ];
         # })
+
+        # the next 3 patches change the repl to a replxx backend
+        #
+        # https://gerrit.lix.systems/c/lix/+/5534
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/6/patch?download&raw";
+          hash = "sha256-vYVjCiapp0WPTCm/YvdiyJNuRaEEkGHyha2DvRpglQc=";
+        })
+
+        # https://gerrit.lix.systems/c/lix/+/5515
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5515/revisions/2/patch?download&raw";
+          hash = "sha256-mm3r8kZBRpmys7h1e37WS/zZdNYosEaxMJfzEFgbXys=";
+        })
+
+        # https://gerrit.lix.systems/c/lix/+/5570
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5570/revisions/1/patch?download&raw";
+          hash = "sha256-kIX5WJzdA82wfyBkmy616++2IOEDcq4uQFDsX9i08aM=";
+        })
       ];
     };
   };
@@ -84,8 +104,16 @@ let
             --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
         '';
 
-        # for build minalloc patch
-        buildInputs = oa.buildInputs ++ [ pkgs.mimalloc ];
+        buildInputs = [
+          # for build minalloc patch
+          pkgs.mimalloc
+
+          # we need to add replxx for the replxx patches. but we also remove
+          # editline from the build so we don't have to bother building lix's
+          # custom editline
+          pkgs.replxx
+        ]
+        ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
 
         # these are flakey
         doInstallCheck = false;
