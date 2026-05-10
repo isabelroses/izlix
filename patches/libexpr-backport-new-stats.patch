@@ -1,0 +1,209 @@
+From ad0313d3b1e7b26608ff206dd9564f0af4e55056 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sun, 10 May 2026 23:24:26 +0100
+Subject: [PATCH 1/2] libexpr: backport new stats
+---
+ lix/libexpr/eval-inline.hh |  1 +
+ lix/libexpr/eval.cc        | 50 +++++++++++++++++++++++++++++---------
+ lix/libexpr/eval.hh        |  1 +
+ lix/libexpr/nixexpr.cc     |  2 ++
+ lix/libexpr/nixexpr.hh     | 18 ++++++++++++--
+ 5 files changed, 58 insertions(+), 14 deletions(-)
+
+diff --git a/lix/libexpr/eval-inline.hh b/lix/libexpr/eval-inline.hh
+index cfdb6427e..ec937dd3a 100644
+--- a/lix/libexpr/eval-inline.hh
++++ b/lix/libexpr/eval-inline.hh
+@@ -82,6 +82,7 @@ void * EvalMemory::allocBytes(size_t size)
+     }
+ #endif
+ 
++    stats.nrValues++;
+     return gcAllocBytes(size);
+ }
+ 
+diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
+index e9d24f941..532f8d130 100644
+--- a/lix/libexpr/eval.cc
++++ b/lix/libexpr/eval.cc
+@@ -163,6 +163,13 @@ static void * oomHandler(size_t requested)
+     throw std::bad_alloc();
+ }
+ 
++static size_t gcCyclesAfterInit = 0;
++
++size_t getGCCycles()
++{
++    return static_cast<size_t>(GC_get_gc_no()) - gcCyclesAfterInit;
++}
++
+ #endif
+ 
+ Symbol getName(const AttrName & name, EvalState & state, Env & env)
+@@ -196,6 +203,8 @@ void initLibExpr()
+        there. */
+     GC_set_no_dls(1);
+ 
++    GC_start_performance_measurement();
++
+     GC_INIT();
+ 
+     // Enable parallel marking
+@@ -203,6 +212,8 @@ void initLibExpr()
+ 
+     GC_set_oom_fn(oomHandler);
+ 
++    gcCyclesAfterInit = GC_get_gc_no();
++
+     /* Set the initial heap size to something fairly big (25% of
+        physical RAM, up to a maximum of 384 MiB) so that in most cases
+        we don't need to garbage collect at all.  (Collection has a
+@@ -1967,15 +1978,22 @@ void Evaluator::printStatistics()
+     struct rusage buf;
+     getrusage(RUSAGE_SELF, &buf);
+     float cpuTime = buf.ru_utime.tv_sec + ((float) buf.ru_utime.tv_usec / 1000000);
+-    auto mem = this->mem.getStats();
+ 
+-    uint64_t bEnvs = mem.nrEnvs * sizeof(Env) + mem.nrValuesInEnvs * sizeof(Value *);
+-    uint64_t bLists = mem.nrListElems * sizeof(Value *);
+-    uint64_t bAttrsets = mem.nrAttrsets * sizeof(Bindings) + mem.nrAttrsInAttrsets * sizeof(Attr);
++    auto & memstats = mem.getStats();
++
++    uint64_t bEnvs = memstats.nrEnvs * sizeof(Env) + memstats.nrValuesInEnvs * sizeof(Value *);
++    uint64_t bLists = memstats.nrListElems * sizeof(Value *);
++    uint64_t bValues = memstats.nrValues * sizeof(Value);
++    uint64_t bAttrsets = memstats.nrAttrsets * sizeof(Bindings) + memstats.nrAttrsInAttrsets * sizeof(Attr);
+ 
+ #if HAVE_BOEHMGC
+     GC_word heapSize, totalBytes;
+     GC_get_heap_usage_safe(&heapSize, 0, 0, 0, &totalBytes);
++    double gcFullOnlyTime = ({
++        auto ms = GC_get_full_gc_total_time();
++        ms * 0.001;
++    });
++    auto gcCycles = getGCCycles();
+ #endif
+ 
+     auto outPath = getEnv("NIX_SHOW_STATS_PATH").value_or("-");
+@@ -1984,29 +2002,36 @@ void Evaluator::printStatistics()
+         fs.open(outPath, std::fstream::out);
+     JSON topObj = JSON::object();
+     topObj["cpuTime"] = cpuTime;
++    topObj["time"] = {
++        {"cpu", cpuTime},
++#if HAVE_BOEHMGC
++        {GC_is_incremental_mode() ? "gcNonIncremental" : "gc", gcFullOnlyTime},
++        {GC_is_incremental_mode() ? "gcNonIncrementalFraction" : "gcFraction", gcFullOnlyTime / cpuTime},
++#endif
++    };
+     topObj["envs"] = {
+-        {"number", mem.nrEnvs},
+-        {"elements", mem.nrValuesInEnvs},
++        {"number", memstats.nrEnvs},
++        {"elements", memstats.nrValuesInEnvs},
+         {"bytes", bEnvs},
+     };
++    topObj["nrExprs"] = Expr::nrExprs.load();
+     topObj["list"] = {
+-        {"elements", mem.nrListElems},
++        {"elements", memstats.nrListElems},
+         {"bytes", bLists},
+         {"concats", stats.nrListConcats},
+     };
+-    // reported for compatibility, even though we no longer allocate these on the heap
+     topObj["values"] = {
+-        {"number", 0},
+-        {"bytes", 0},
++        {"number", memstats.nrValues},
++        {"bytes", bValues},
+     };
+     topObj["symbols"] = {
+         {"number", symbols.size()},
+         {"bytes", symbols.totalSize()},
+     };
+     topObj["sets"] = {
+-        {"number", mem.nrAttrsets},
++        {"number", memstats.nrAttrsets},
+         {"bytes", bAttrsets},
+-        {"elements", mem.nrAttrsInAttrsets},
++        {"elements", memstats.nrAttrsInAttrsets},
+     };
+     topObj["sizes"] = {
+         {"Env", sizeof(Env)},
+@@ -2025,6 +2050,7 @@ void Evaluator::printStatistics()
+     topObj["gc"] = {
+         {"heapSize", heapSize},
+         {"totalBytes", totalBytes},
++        {"cycles", gcCycles},
+     };
+ #endif
+ 
+diff --git a/lix/libexpr/eval.hh b/lix/libexpr/eval.hh
+index 934e272be..3e52cf637 100644
+--- a/lix/libexpr/eval.hh
++++ b/lix/libexpr/eval.hh
+@@ -181,6 +181,7 @@ public:
+     {
+         unsigned long nrEnvs = 0;
+         unsigned long nrValuesInEnvs = 0;
++        unsigned long nrValues = 0;
+         unsigned long nrAttrsets = 0;
+         unsigned long nrAttrsInAttrsets = 0;
+         unsigned long nrListElems = 0;
+diff --git a/lix/libexpr/nixexpr.cc b/lix/libexpr/nixexpr.cc
+index c31e68141..8ac361e28 100644
+--- a/lix/libexpr/nixexpr.cc
++++ b/lix/libexpr/nixexpr.cc
+@@ -9,6 +9,8 @@
+ 
+ namespace nix {
+ 
++std::atomic<uint64_t> Expr::nrExprs{0};
++
+ ExprBlackHole eBlackHole;
+ 
+ static Env nullEnv;
+diff --git a/lix/libexpr/nixexpr.hh b/lix/libexpr/nixexpr.hh
+index a2f5bfbf3..49da50df4 100644
+--- a/lix/libexpr/nixexpr.hh
++++ b/lix/libexpr/nixexpr.hh
+@@ -1,6 +1,8 @@
+ #pragma once
+ ///@file
+ 
++#include <atomic>
++#include <cstdint>
+ #include <map>
+ #include <memory>
+ #include <vector>
+@@ -111,13 +113,25 @@ struct Expr
+ protected:
+     Expr(Expr &&) = default;
+     Expr & operator=(Expr &&) = default;
+-    Expr(const PosIdx pos) : pos(pos) {};
++    Expr(const PosIdx pos) : pos(pos)
++    {
++        ++nrExprs;
++    };
+ 
+ public:
+ 
++    /**
++     * Total number of `Expr` instances ever constructed. Atomic so the
++     * parser can safely run without locking; only read by `printStatistics`.
++     */
++    static std::atomic<uint64_t> nrExprs;
++
+     PosIdx pos;
+ 
+-    Expr() = default;
++    Expr()
++    {
++        ++nrExprs;
++    }
+     Expr(const Expr &) = delete;
+     Expr & operator=(const Expr &) = delete;
+     virtual ~Expr() { };
+-- 
+2.51.2
+

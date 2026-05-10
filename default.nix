@@ -44,7 +44,9 @@ let
         # backport some of nix's newer eval stats stuff. not sure exactly when they
         # were added (cba to find the diff). so lets add them back. i doubt lix would
         # accept this since it touches json stuff
-        ./patches/backport-nix-eval-stats.patch
+        ./patches/libexpr-backport-new-stats.patch
+        # this one isn't *needed* per say but its nice to have for *accuracy* i suppose
+        ./patches/libexpr-backport-counter-for-stats.patch
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841

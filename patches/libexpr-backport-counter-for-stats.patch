@@ -1,0 +1,296 @@
+From fdbb0f2966b5ce2b6b8e417a04e639d9ff9871dc Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Mon, 11 May 2026 00:00:46 +0100
+Subject: [PATCH 2/2] libexpr: backport counter for stats
+---
+ lix/libexpr/counter.hh  | 74 +++++++++++++++++++++++++++++++++++++++++
+ lix/libexpr/eval.cc     | 34 +++++++++----------
+ lix/libexpr/eval.hh     | 34 ++++++++++---------
+ lix/libexpr/meson.build |  1 +
+ lix/libexpr/nixexpr.cc  |  2 +-
+ lix/libexpr/nixexpr.hh  |  4 +--
+ 6 files changed, 114 insertions(+), 35 deletions(-)
+ create mode 100644 lix/libexpr/counter.hh
+
+diff --git a/lix/libexpr/counter.hh b/lix/libexpr/counter.hh
+new file mode 100644
+index 000000000..ff7e443f4
+--- /dev/null
++++ b/lix/libexpr/counter.hh
+@@ -0,0 +1,74 @@
++/**
++ * @file
++ * @brief This header is for a counter to help with nix stats accuracy
++ */
++#pragma once
++
++#include <atomic>
++#include <cstdint>
++
++namespace nix {
++
++/**
++ * An atomic counter aligned on a cache line to prevent false sharing.
++ * The counter is only enabled when the `NIX_SHOW_STATS` environment
++ * variable is set. This is to prevent contention on these counters
++ * when multi-threaded evaluation is enabled.
++ */
++struct alignas(std::hardware_destructive_interference_size) Counter
++{
++    using value_type = uint64_t;
++
++    std::atomic<value_type> inner{0};
++
++    static bool enabled;
++
++    Counter() {}
++
++    operator value_type() const noexcept
++    {
++        return inner;
++    }
++
++    void operator=(value_type n) noexcept
++    {
++        inner = n;
++    }
++
++    value_type load() const noexcept
++    {
++        return inner;
++    }
++
++    value_type operator++() noexcept
++    {
++        return enabled ? ++inner : 0;
++    }
++
++    value_type operator++(int) noexcept
++    {
++        return enabled ? inner++ : 0;
++    }
++
++    value_type operator--() noexcept
++    {
++        return enabled ? --inner : 0;
++    }
++
++    value_type operator--(int) noexcept
++    {
++        return enabled ? inner-- : 0;
++    }
++
++    value_type operator+=(value_type n) noexcept
++    {
++        return enabled ? inner += n : 0;
++    }
++
++    value_type operator-=(value_type n) noexcept
++    {
++        return enabled ? inner -= n : 0;
++    }
++};
++
++} // namespace nix
+diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
+index 532f8d130..7f02ec34e 100644
+--- a/lix/libexpr/eval.cc
++++ b/lix/libexpr/eval.cc
+@@ -1944,6 +1944,8 @@ bool EvalState::eqValues(Value & v1, Value & v2, const PosIdx pos, std::string_v
+     }
+ }
+ 
++bool Counter::enabled = getEnv("NIX_SHOW_STATS").value_or("0") != "0";
++
+ bool Evaluator::fullGC() {
+ #if HAVE_BOEHMGC
+     GC_gcollect();
+@@ -1960,9 +1962,7 @@ bool Evaluator::fullGC() {
+ 
+ void Evaluator::maybePrintStats()
+ {
+-    bool showStats = getEnv("NIX_SHOW_STATS").value_or("0") != "0";
+-
+-    if (showStats) {
++    if (Counter::enabled) {
+         // Make the final heap size more deterministic.
+ #if HAVE_BOEHMGC
+         if (!fullGC()) {
+@@ -2010,18 +2010,18 @@ void Evaluator::printStatistics()
+ #endif
+     };
+     topObj["envs"] = {
+-        {"number", memstats.nrEnvs},
+-        {"elements", memstats.nrValuesInEnvs},
++        {"number", memstats.nrEnvs.load()},
++        {"elements", memstats.nrValuesInEnvs.load()},
+         {"bytes", bEnvs},
+     };
+     topObj["nrExprs"] = Expr::nrExprs.load();
+     topObj["list"] = {
+-        {"elements", memstats.nrListElems},
++        {"elements", memstats.nrListElems.load()},
+         {"bytes", bLists},
+-        {"concats", stats.nrListConcats},
++        {"concats", stats.nrListConcats.load()},
+     };
+     topObj["values"] = {
+-        {"number", memstats.nrValues},
++        {"number", memstats.nrValues.load()},
+         {"bytes", bValues},
+     };
+     topObj["symbols"] = {
+@@ -2029,9 +2029,9 @@ void Evaluator::printStatistics()
+         {"bytes", symbols.totalSize()},
+     };
+     topObj["sets"] = {
+-        {"number", memstats.nrAttrsets},
++        {"number", memstats.nrAttrsets.load()},
+         {"bytes", bAttrsets},
+-        {"elements", memstats.nrAttrsInAttrsets},
++        {"elements", memstats.nrAttrsInAttrsets.load()},
+     };
+     topObj["sizes"] = {
+         {"Env", sizeof(Env)},
+@@ -2039,13 +2039,13 @@ void Evaluator::printStatistics()
+         {"Bindings", sizeof(Bindings)},
+         {"Attr", sizeof(Attr)},
+     };
+-    topObj["nrOpUpdates"] = stats.nrOpUpdates;
+-    topObj["nrOpUpdateValuesCopied"] = stats.nrOpUpdateValuesCopied;
+-    topObj["nrThunks"] = stats.nrThunks;
+-    topObj["nrAvoided"] = stats.nrAvoided;
+-    topObj["nrLookups"] = stats.nrLookups;
+-    topObj["nrPrimOpCalls"] = stats.nrPrimOpCalls;
+-    topObj["nrFunctionCalls"] = stats.nrFunctionCalls;
++    topObj["nrOpUpdates"] = stats.nrOpUpdates.load();
++    topObj["nrOpUpdateValuesCopied"] = stats.nrOpUpdateValuesCopied.load();
++    topObj["nrThunks"] = stats.nrThunks.load();
++    topObj["nrAvoided"] = stats.nrAvoided.load();
++    topObj["nrLookups"] = stats.nrLookups.load();
++    topObj["nrPrimOpCalls"] = stats.nrPrimOpCalls.load();
++    topObj["nrFunctionCalls"] = stats.nrFunctionCalls.load();
+ #if HAVE_BOEHMGC
+     topObj["gc"] = {
+         {"heapSize", heapSize},
+diff --git a/lix/libexpr/eval.hh b/lix/libexpr/eval.hh
+index 3e52cf637..68685dc6c 100644
+--- a/lix/libexpr/eval.hh
++++ b/lix/libexpr/eval.hh
+@@ -2,6 +2,7 @@
+ ///@file
+ 
+ #include "lix/libexpr/attr-set.hh"
++#include "lix/libexpr/counter.hh"
+ #include "lix/libexpr/eval-error.hh"
+ #include "lix/libexpr/gc-alloc.hh"
+ #include "lix/libutil/box_ptr.hh"
+@@ -179,12 +180,12 @@ class EvalMemory
+ public:
+     struct Statistics
+     {
+-        unsigned long nrEnvs = 0;
+-        unsigned long nrValuesInEnvs = 0;
+-        unsigned long nrValues = 0;
+-        unsigned long nrAttrsets = 0;
+-        unsigned long nrAttrsInAttrsets = 0;
+-        unsigned long nrListElems = 0;
++        Counter nrEnvs;
++        Counter nrValuesInEnvs;
++        Counter nrValues;
++        Counter nrAttrsets;
++        Counter nrAttrsInAttrsets;
++        Counter nrListElems;
+     };
+ 
+     EvalMemory();
+@@ -209,7 +210,10 @@ public:
+         return BindingsBuilder(symbols, allocBindings(capacity), capacity);
+     }
+ 
+-    const Statistics getStats() const { return stats; }
++    const Statistics & getStats() const
++    {
++        return stats;
++    }
+ 
+ private:
+     Statistics stats;
+@@ -455,14 +459,14 @@ public:
+ 
+ struct EvalStatistics
+ {
+-    unsigned long nrLookups = 0;
+-    unsigned long nrAvoided = 0;
+-    unsigned long nrOpUpdates = 0;
+-    unsigned long nrOpUpdateValuesCopied = 0;
+-    unsigned long nrListConcats = 0;
+-    unsigned long nrPrimOpCalls = 0;
+-    unsigned long nrFunctionCalls = 0;
+-    unsigned long nrThunks = 0;
++    Counter nrLookups;
++    Counter nrAvoided;
++    Counter nrOpUpdates;
++    Counter nrOpUpdateValuesCopied;
++    Counter nrListConcats;
++    Counter nrPrimOpCalls;
++    Counter nrFunctionCalls;
++    Counter nrThunks;
+ 
+     bool countCalls = false;
+ 
+diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
+index fff97b8f7..91614212b 100644
+--- a/lix/libexpr/meson.build
++++ b/lix/libexpr/meson.build
+@@ -246,6 +246,7 @@ libexpr_headers = files(
+   # keep-sorted start
+   'attr-path.hh',
+   'attr-set.hh',
++  'counter.hh',
+   'eval-cache.hh',
+   'eval-error.hh',
+   'eval-inline.hh',
+diff --git a/lix/libexpr/nixexpr.cc b/lix/libexpr/nixexpr.cc
+index 8ac361e28..23300e97b 100644
+--- a/lix/libexpr/nixexpr.cc
++++ b/lix/libexpr/nixexpr.cc
+@@ -9,7 +9,7 @@
+ 
+ namespace nix {
+ 
+-std::atomic<uint64_t> Expr::nrExprs{0};
++Counter Expr::nrExprs;
+ 
+ ExprBlackHole eBlackHole;
+ 
+diff --git a/lix/libexpr/nixexpr.hh b/lix/libexpr/nixexpr.hh
+index 49da50df4..94b044a55 100644
+--- a/lix/libexpr/nixexpr.hh
++++ b/lix/libexpr/nixexpr.hh
+@@ -1,12 +1,12 @@
+ #pragma once
+ ///@file
+ 
+-#include <atomic>
+ #include <cstdint>
+ #include <map>
+ #include <memory>
+ #include <vector>
+ 
++#include "lix/libexpr/counter.hh"
+ #include "lix/libexpr/value.hh"
+ #include "lix/libexpr/symbol-table.hh"
+ #include "lix/libutil/json.hh"
+@@ -124,7 +124,7 @@ public:
+      * Total number of `Expr` instances ever constructed. Atomic so the
+      * parser can safely run without locking; only read by `printStatistics`.
+      */
+-    static std::atomic<uint64_t> nrExprs;
++    static Counter nrExprs;
+ 
+     PosIdx pos;
+ 
+-- 
+2.51.2
+
