@@ -1,23 +1,23 @@
-From fdbb0f2966b5ce2b6b8e417a04e639d9ff9871dc Mon Sep 17 00:00:00 2001
+From b35797a748361992423c2416fa922a91c59295f7 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Mon, 11 May 2026 00:00:46 +0100
 Subject: [PATCH 2/2] libexpr: backport counter for stats
 ---
- lix/libexpr/counter.hh  | 74 +++++++++++++++++++++++++++++++++++++++++
- lix/libexpr/eval.cc     | 34 +++++++++----------
- lix/libexpr/eval.hh     | 34 ++++++++++---------
+ lix/libexpr/counter.hh  | 83 +++++++++++++++++++++++++++++++++++++++++
+ lix/libexpr/eval.cc     | 34 ++++++++---------
+ lix/libexpr/eval.hh     | 34 +++++++++--------
  lix/libexpr/meson.build |  1 +
  lix/libexpr/nixexpr.cc  |  2 +-
- lix/libexpr/nixexpr.hh  |  4 +--
- 6 files changed, 114 insertions(+), 35 deletions(-)
+ lix/libexpr/nixexpr.hh  |  4 +-
+ 6 files changed, 123 insertions(+), 35 deletions(-)
  create mode 100644 lix/libexpr/counter.hh
 
 diff --git a/lix/libexpr/counter.hh b/lix/libexpr/counter.hh
 new file mode 100644
-index 000000000..ff7e443f4
+index 000000000..86b4b7850
 --- /dev/null
 +++ b/lix/libexpr/counter.hh
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,83 @@
 +/**
 + * @file
 + * @brief This header is for a counter to help with nix stats accuracy
@@ -25,9 +25,18 @@ index 000000000..ff7e443f4
 +#pragma once
 +
 +#include <atomic>
++#include <cstddef>
 +#include <cstdint>
++#include <new>
 +
 +namespace nix {
++
++#ifdef __cpp_lib_hardware_interference_size
++inline constexpr std::size_t hardware_destructive_interference_size =
++    std::hardware_destructive_interference_size;
++#else
++inline constexpr std::size_t hardware_destructive_interference_size = 64;
++#endif
 +
 +/**
 + * An atomic counter aligned on a cache line to prevent false sharing.
@@ -35,7 +44,7 @@ index 000000000..ff7e443f4
 + * variable is set. This is to prevent contention on these counters
 + * when multi-threaded evaluation is enabled.
 + */
-+struct alignas(std::hardware_destructive_interference_size) Counter
++struct alignas(hardware_destructive_interference_size) Counter
 +{
 +    using value_type = uint64_t;
 +
