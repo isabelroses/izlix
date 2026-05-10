@@ -1,17 +1,15 @@
-From 9cd0fd0a2d3cf0df832200409c83c9d98836b71b Mon Sep 17 00:00:00 2001
+From d21df97e4874bc11f3adb90f1299b642a1e2174c Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 10 May 2026 16:49:09 +0100
 Subject: [PATCH] libexpr: backport nix eval stats
-
-Change-Id: I031361c5bab8b019ce952c95da9920b387c368e5
 ---
- lix/libexpr/eval.cc    | 32 ++++++++++++++++++++++++++++++++
+ lix/libexpr/eval.cc    | 46 +++++++++++++++++++++++++++++++++++++++---
  lix/libexpr/nixexpr.cc |  2 ++
- lix/libexpr/nixexpr.hh | 18 ++++++++++++++++--
- 3 files changed, 50 insertions(+), 2 deletions(-)
+ lix/libexpr/nixexpr.hh | 18 +++++++++++++++--
+ 3 files changed, 61 insertions(+), 5 deletions(-)
 
 diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
-index e9d24f941..ced9ff24e 100644
+index e9d24f941..fe099a6b9 100644
 --- a/lix/libexpr/eval.cc
 +++ b/lix/libexpr/eval.cc
 @@ -163,6 +163,16 @@ static void * oomHandler(size_t requested)
@@ -59,7 +57,7 @@ index e9d24f941..ced9ff24e 100644
  #endif
  
      auto outPath = getEnv("NIX_SHOW_STATS_PATH").value_or("-");
-@@ -1984,11 +2006,20 @@ void Evaluator::printStatistics()
+@@ -1984,20 +2006,37 @@ void Evaluator::printStatistics()
          fs.open(outPath, std::fstream::out);
      JSON topObj = JSON::object();
      topObj["cpuTime"] = cpuTime;
@@ -80,7 +78,27 @@ index e9d24f941..ced9ff24e 100644
      topObj["list"] = {
          {"elements", mem.nrListElems},
          {"bytes", bLists},
-@@ -2025,6 +2056,7 @@ void Evaluator::printStatistics()
+         {"concats", stats.nrListConcats},
+     };
+-    // reported for compatibility, even though we no longer allocate these on the heap
++    /* Unlike upstream Nix, Lix never allocates `Value`s as standalone heap
++       objects -- they live inline inside Envs, Attrs, and List elements.
++       So we report the total number of Value slots that have been
++       allocated across those containers. The byte count overlaps with the
++       per-container `bytes` totals above (the Values are physically part
++       of those containers); we report it anyway so the field is comparable
++       to upstream's output and so `Value` size differences (Lix uses an
++       8-byte tagged pointer vs. upstream's 16+ bytes) are observable. */
++    uint64_t nrValues = mem.nrValuesInEnvs + mem.nrListElems + mem.nrAttrsInAttrsets;
+     topObj["values"] = {
+-        {"number", 0},
+-        {"bytes", 0},
++        {"number", nrValues},
++        {"bytes", nrValues * sizeof(Value)},
+     };
+     topObj["symbols"] = {
+         {"number", symbols.size()},
+@@ -2025,6 +2064,7 @@ void Evaluator::printStatistics()
      topObj["gc"] = {
          {"heapSize", heapSize},
          {"totalBytes", totalBytes},
