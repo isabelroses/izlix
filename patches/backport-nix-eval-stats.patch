@@ -1,15 +1,17 @@
-From 018b99b50cacfc7de9d9ebc9a1d198d1bce6ba1b Mon Sep 17 00:00:00 2001
+From 9cd0fd0a2d3cf0df832200409c83c9d98836b71b Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 10 May 2026 16:49:09 +0100
 Subject: [PATCH] libexpr: backport nix eval stats
+
+Change-Id: I031361c5bab8b019ce952c95da9920b387c368e5
 ---
- lix/libexpr/eval.cc    | 27 +++++++++++++++++++++++++++
+ lix/libexpr/eval.cc    | 32 ++++++++++++++++++++++++++++++++
  lix/libexpr/nixexpr.cc |  2 ++
  lix/libexpr/nixexpr.hh | 18 ++++++++++++++++--
- 3 files changed, 45 insertions(+), 2 deletions(-)
+ 3 files changed, 50 insertions(+), 2 deletions(-)
 
 diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
-index e9d24f941..7a7aaeeed 100644
+index e9d24f941..ced9ff24e 100644
 --- a/lix/libexpr/eval.cc
 +++ b/lix/libexpr/eval.cc
 @@ -163,6 +163,16 @@ static void * oomHandler(size_t requested)
@@ -29,8 +31,15 @@ index e9d24f941..7a7aaeeed 100644
  #endif
  
  Symbol getName(const AttrName & name, EvalState & state, Env & env)
-@@ -198,6 +208,8 @@ void initLibExpr()
+@@ -196,8 +206,15 @@ void initLibExpr()
+        there. */
+     GC_set_no_dls(1);
  
++    /* Enable perf measurements before GC_INIT() so that
++       GC_get_full_gc_total_time() actually accumulates. Without this call
++       it always returns 0, making `time.gc` in NIX_SHOW_STATS useless. */
++    GC_start_performance_measurement();
++
      GC_INIT();
  
 +    gcCyclesAfterInit = GC_get_gc_no();
@@ -38,7 +47,7 @@ index e9d24f941..7a7aaeeed 100644
      // Enable parallel marking
      GC_start_mark_threads();
  
-@@ -1976,6 +1988,11 @@ void Evaluator::printStatistics()
+@@ -1976,6 +1993,11 @@ void Evaluator::printStatistics()
  #if HAVE_BOEHMGC
      GC_word heapSize, totalBytes;
      GC_get_heap_usage_safe(&heapSize, 0, 0, 0, &totalBytes);
@@ -50,7 +59,7 @@ index e9d24f941..7a7aaeeed 100644
  #endif
  
      auto outPath = getEnv("NIX_SHOW_STATS_PATH").value_or("-");
-@@ -1984,11 +2001,20 @@ void Evaluator::printStatistics()
+@@ -1984,11 +2006,20 @@ void Evaluator::printStatistics()
          fs.open(outPath, std::fstream::out);
      JSON topObj = JSON::object();
      topObj["cpuTime"] = cpuTime;
@@ -71,7 +80,7 @@ index e9d24f941..7a7aaeeed 100644
      topObj["list"] = {
          {"elements", mem.nrListElems},
          {"bytes", bLists},
-@@ -2025,6 +2051,7 @@ void Evaluator::printStatistics()
+@@ -2025,6 +2056,7 @@ void Evaluator::printStatistics()
      topObj["gc"] = {
          {"heapSize", heapSize},
          {"totalBytes", totalBytes},
