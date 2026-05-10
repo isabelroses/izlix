@@ -27,10 +27,6 @@ let
         # don't alter the names of derivations for nix store diff-closure
         ./patches/closure-names.patch
 
-        # TODO: upstream this?
-        # a port of <https://github.com/NixOS/nix/pull/13800> for lix
-        # ./patches/wal-mode-for-sqlite-cache-databases.patch
-
         # add more builtins to lix, this consists of the following:
         # - `builtins.abs` which will get you a absolute value of a number
         ./patches/builtins-abs.patch
@@ -45,16 +41,10 @@ let
         # <https://github.com/NixOS/nix/pull/15596> for lix
         ./patches/build-use-minalloc.patch
 
-        # the bellow two patches conflict with each other
-        #
-        #  warn when encountering IFD with
-        # https://gerrit.lix.systems/c/lix/+/3879
-        # (pkgs.fetchpatch2 {
-        #   name = "warn-import-from-derivation";
-        #   url = "https://gerrit.lix.systems/changes/lix~3879/revisions/10/patch?download&raw";
-        #   hash = "sha256-3h00IuMlFZHWLPs6EfScDlN46+dTB5qrhM6l2Dw1PHI=";
-        #   excludes = [ "doc/manual/change-authors.yml" ];
-        # })
+        # backport some of nix's newer eval stats stuff. not sure exactly when they
+        # were added (cba to find the diff). so lets add them back. i doubt lix would
+        # accept this since it touches json stuff
+        ./patches/backport-nix-eval-stats.patch
 
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841

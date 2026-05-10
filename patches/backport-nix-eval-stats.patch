@@ -1,0 +1,138 @@
+From 018b99b50cacfc7de9d9ebc9a1d198d1bce6ba1b Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sun, 10 May 2026 16:49:09 +0100
+Subject: [PATCH] libexpr: backport nix eval stats
+---
+ lix/libexpr/eval.cc    | 27 +++++++++++++++++++++++++++
+ lix/libexpr/nixexpr.cc |  2 ++
+ lix/libexpr/nixexpr.hh | 18 ++++++++++++++++--
+ 3 files changed, 45 insertions(+), 2 deletions(-)
+
+diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
+index e9d24f941..7a7aaeeed 100644
+--- a/lix/libexpr/eval.cc
++++ b/lix/libexpr/eval.cc
+@@ -163,6 +163,16 @@ static void * oomHandler(size_t requested)
+     throw std::bad_alloc();
+ }
+ 
++/* Number of GC cycles that had completed by the time the collector was
++   initialized. Used to make `gc.cycles` in the stats output relative to
++   our process rather than to the GC's internal counter. */
++static GC_word gcCyclesAfterInit = 0;
++
++size_t getGCCycles()
++{
++    return static_cast<size_t>(GC_get_gc_no()) - static_cast<size_t>(gcCyclesAfterInit);
++}
++
+ #endif
+ 
+ Symbol getName(const AttrName & name, EvalState & state, Env & env)
+@@ -198,6 +208,8 @@ void initLibExpr()
+ 
+     GC_INIT();
+ 
++    gcCyclesAfterInit = GC_get_gc_no();
++
+     // Enable parallel marking
+     GC_start_mark_threads();
+ 
+@@ -1976,6 +1988,11 @@ void Evaluator::printStatistics()
+ #if HAVE_BOEHMGC
+     GC_word heapSize, totalBytes;
+     GC_get_heap_usage_safe(&heapSize, 0, 0, 0, &totalBytes);
++    /* `GC_get_full_gc_total_time` returns ms; convert to seconds. It only
++       counts time spent in non-incremental (full) collections, so we report
++       it under different keys depending on the collector mode. */
++    double gcFullOnlyTime = GC_get_full_gc_total_time() * 0.001;
++    auto gcCycles = getGCCycles();
+ #endif
+ 
+     auto outPath = getEnv("NIX_SHOW_STATS_PATH").value_or("-");
+@@ -1984,11 +2001,20 @@ void Evaluator::printStatistics()
+         fs.open(outPath, std::fstream::out);
+     JSON topObj = JSON::object();
+     topObj["cpuTime"] = cpuTime;
++    topObj["time"] = {
++        {"cpu", cpuTime},
++#if HAVE_BOEHMGC
++        {GC_is_incremental_mode() ? "gcNonIncremental" : "gc", gcFullOnlyTime},
++        {GC_is_incremental_mode() ? "gcNonIncrementalFraction" : "gcFraction",
++         cpuTime > 0 ? gcFullOnlyTime / cpuTime : 0.0},
++#endif
++    };
+     topObj["envs"] = {
+         {"number", mem.nrEnvs},
+         {"elements", mem.nrValuesInEnvs},
+         {"bytes", bEnvs},
+     };
++    topObj["nrExprs"] = Expr::nrExprs.load();
+     topObj["list"] = {
+         {"elements", mem.nrListElems},
+         {"bytes", bLists},
+@@ -2025,6 +2051,7 @@ void Evaluator::printStatistics()
+     topObj["gc"] = {
+         {"heapSize", heapSize},
+         {"totalBytes", totalBytes},
++        {"cycles", gcCycles},
+     };
+ #endif
+ 
+diff --git a/lix/libexpr/nixexpr.cc b/lix/libexpr/nixexpr.cc
+index c31e68141..8ac361e28 100644
+--- a/lix/libexpr/nixexpr.cc
++++ b/lix/libexpr/nixexpr.cc
+@@ -9,6 +9,8 @@
+ 
+ namespace nix {
+ 
++std::atomic<uint64_t> Expr::nrExprs{0};
++
+ ExprBlackHole eBlackHole;
+ 
+ static Env nullEnv;
+diff --git a/lix/libexpr/nixexpr.hh b/lix/libexpr/nixexpr.hh
+index a2f5bfbf3..49da50df4 100644
+--- a/lix/libexpr/nixexpr.hh
++++ b/lix/libexpr/nixexpr.hh
+@@ -1,6 +1,8 @@
+ #pragma once
+ ///@file
+ 
++#include <atomic>
++#include <cstdint>
+ #include <map>
+ #include <memory>
+ #include <vector>
+@@ -111,13 +113,25 @@ struct Expr
+ protected:
+     Expr(Expr &&) = default;
+     Expr & operator=(Expr &&) = default;
+-    Expr(const PosIdx pos) : pos(pos) {};
++    Expr(const PosIdx pos) : pos(pos)
++    {
++        ++nrExprs;
++    };
+ 
+ public:
+ 
++    /**
++     * Total number of `Expr` instances ever constructed. Atomic so the
++     * parser can safely run without locking; only read by `printStatistics`.
++     */
++    static std::atomic<uint64_t> nrExprs;
++
+     PosIdx pos;
+ 
+-    Expr() = default;
++    Expr()
++    {
++        ++nrExprs;
++    }
+     Expr(const Expr &) = delete;
+     Expr & operator=(const Expr &) = delete;
+     virtual ~Expr() { };
+-- 
+2.51.2
+
