@@ -124,6 +124,10 @@ let
           };
         }
       );
+
+      nix-serve-ng = prev.nix-serve-ng.overrideAttrs (prevAttrs: {
+        meta.broken = true;
+      });
     }
   );
 in
