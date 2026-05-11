@@ -3,13 +3,13 @@ From: isabel <isabel@isabelroses.com>
 Date: Mon, 11 May 2026 00:00:46 +0100
 Subject: [PATCH 2/2] libexpr: backport counter for stats
 ---
- lix/libexpr/counter.hh  | 74 +++++++++++++++++++++++++++++++++++++++++
+ lix/libexpr/counter.hh  | 75 +++++++++++++++++++++++++++++++++++++++++
  lix/libexpr/eval.cc     | 34 +++++++++----------
  lix/libexpr/eval.hh     | 34 ++++++++++---------
  lix/libexpr/meson.build |  1 +
  lix/libexpr/nixexpr.cc  |  2 +-
  lix/libexpr/nixexpr.hh  |  4 +--
- 6 files changed, 114 insertions(+), 35 deletions(-)
+ 6 files changed, 115 insertions(+), 35 deletions(-)
  create mode 100644 lix/libexpr/counter.hh
 
 diff --git a/lix/libexpr/counter.hh b/lix/libexpr/counter.hh
@@ -17,7 +17,7 @@ new file mode 100644
 index 000000000..ff7e443f4
 --- /dev/null
 +++ b/lix/libexpr/counter.hh
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,75 @@
 +/**
 + * @file
 + * @brief This header is for a counter to help with nix stats accuracy
@@ -26,6 +26,7 @@ index 000000000..ff7e443f4
 +
 +#include <atomic>
 +#include <cstdint>
++#include <new>
 +
 +namespace nix {
 +
