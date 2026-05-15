@@ -60,8 +60,8 @@ let
         #
         # https://gerrit.lix.systems/c/lix/+/5534
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/6/patch?download&raw";
-          hash = "sha256-vYVjCiapp0WPTCm/YvdiyJNuRaEEkGHyha2DvRpglQc=";
+          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/8/patch?download&raw";
+          hash = "sha256-O60a+zvjSyZg1OP/q5eY27rS937oYDcz0tgFvHnrgAE=";
         })
 
         # https://gerrit.lix.systems/c/lix/+/5515
@@ -103,7 +103,15 @@ let
           # we need to add replxx for the replxx patches. but we also remove
           # editline from the build so we don't have to bother building lix's
           # custom editline
-          pkgs.replxx
+          (pkgs.replxx.overrideAttrs (prev: {
+            src = pkgs.fetchFromForgejo {
+              domain = "git.lix.systems";
+              owner = "lix-project";
+              repo = "replxx";
+              rev = "1f149bfe20bf6e49c1afd4154eaf0032c8c2fda2";
+              hash = "sha256-rXjNicE0Ed5Lwyyv61QAWhDuxIv4208u7//MK67uexc";
+            };
+          }))
         ]
         ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
 
