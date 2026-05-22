@@ -60,20 +60,27 @@ let
         #
         # https://gerrit.lix.systems/c/lix/+/5534
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/8/patch?download&raw";
-          hash = "sha256-O60a+zvjSyZg1OP/q5eY27rS937oYDcz0tgFvHnrgAE=";
+          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/9/patch?download&raw";
+          hash = "sha256-10da554RvZoAcIvyyf8mHRX78Y4uwHoUY7DP5eQAHGI=";
         })
 
         # https://gerrit.lix.systems/c/lix/+/5515
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5515/revisions/2/patch?download&raw";
-          hash = "sha256-mm3r8kZBRpmys7h1e37WS/zZdNYosEaxMJfzEFgbXys=";
+          url = "https://gerrit.lix.systems/changes/lix~5515/revisions/3/patch?download&raw";
+          hash = "sha256-4lI8TqVogFZ1nZZpLgp3hKY2fCd1oyYT+dFMK4N0Gy8=";
         })
 
         # https://gerrit.lix.systems/c/lix/+/5570
         (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5570/revisions/1/patch?download&raw";
-          hash = "sha256-kIX5WJzdA82wfyBkmy616++2IOEDcq4uQFDsX9i08aM=";
+          url = "https://gerrit.lix.systems/changes/lix~5570/revisions/2/patch?download&raw";
+          hash = "sha256-jsjjhJ6jLBDpg9g6htgLAT20Pi/r521B29Gi4T+fuKY=";
+        })
+
+        # fix __structuredAttrs fod url guessing
+        # https://gerrit.lix.systems/c/lix/+/5441
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5441/revisions/7/patch?download&raw";
+          hash = "sha256-dbSxogOs6OrfCRCMIoFGUGXl0aeK6O1g4TZI/l/kvMA=";
         })
       ];
     };
