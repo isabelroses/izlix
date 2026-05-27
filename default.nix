@@ -127,7 +127,7 @@ let
       });
 
       nil = prev.nil.overrideAttrs (
-        finalAttrs: _: {
+        finalAttrs: prevAttrs: {
           src = pkgs.fetchFromGitHub {
             owner = "oxalica";
             repo = "nil";
@@ -139,6 +139,10 @@ let
             inherit (finalAttrs) src;
             hash = "sha256-LS2IW4gZ1k6Xl5weMNwxvVA2z56r4rPkjqrkROZTmBw=";
           };
+
+          patches = prevAttrs.patches or [ ] ++ [
+            ./patches/nil-feat-inherit-completion.patch
+          ];
         }
       );
 

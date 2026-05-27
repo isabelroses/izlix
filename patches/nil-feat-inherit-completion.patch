@@ -1,0 +1,104 @@
+From 52be13566a18d78e8ce5b28e0ae9e6fff9ece75c Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Wed, 27 May 2026 10:34:27 +0100
+Subject: [PATCH] feat: inherit completion
+
+---
+ crates/ide/src/ide/completion.rs | 69 ++++++++++++++++++++++++++++++++
+ 1 file changed, 69 insertions(+)
+
+diff --git a/crates/ide/src/ide/completion.rs b/crates/ide/src/ide/completion.rs
+index 0943edd..52cbdec 100644
+--- a/crates/ide/src/ide/completion.rs
++++ b/crates/ide/src/ide/completion.rs
+@@ -359,6 +359,20 @@ impl Context<'_> {
+                 });
+             });
+ 
++        let with_envs = self
++            .scopes
++            .ancestors(scope_id)
++            .filter_map(|scope| scope.as_with())
++            .filter_map(|with_expr| match &self.module[with_expr] {
++                &Expr::With(env, _) => Some(env),
++                _ => None,
++            })
++            .collect::<Vec<_>>();
++        for env in with_envs {
++            let ty = self.infer.ty_for_expr(env);
++            self.complete_attr(ty);
++        }
++
+         Some(())
+     }
+ 
+@@ -523,6 +537,17 @@ impl Context<'_> {
+ 
+     /// Complete an `Attr` of an `inherit` binding.
+     fn complete_inherit_attr(&mut self, inherit: ast::Inherit) -> Option<()> {
++        if let Some(from_expr) = inherit.from_expr().and_then(|p| p.expr()) {
++            if let Some(expr_id) = self
++                .source_map
++                .expr_for_node(AstPtr::new(from_expr.syntax()))
++            {
++                let ty = self.infer.ty_for_expr(expr_id);
++                self.complete_attr(ty);
++            }
++            return Some(());
++        }
++
+         let ptr = AstPtr::new(&inherit.syntax().parent()?);
+         let container_expr = self.source_map.expr_for_node(ptr)?;
+         let scope_id = self.scopes.scope_for_expr(container_expr)?;
+@@ -1064,4 +1089,48 @@ stdenv.mkDerivation {
+         check_no("let abc = 1; in # ab$0", "abc");
+         check_no("let abc = 1; in /* ab$0 */", "abc");
+     }
++
++    #[test]
++    fn with_body() {
++        check(
++            "with builtins; g$0",
++            "genList",
++            expect!["(BuiltinFunction) with builtins; genList"],
++        );
++        check(
++            "let s = { foo = 1; bar = 2; }; in with s; f$0",
++            "foo",
++            expect!["(Field) let s = { foo = 1; bar = 2; }; in with s; foo"],
++        );
++        check(
++            "let a = { foo = 1; }; b = { bar = 2; }; in with a; with b; b$0",
++            "bar",
++            expect!["(Field) let a = { foo = 1; }; b = { bar = 2; }; in with a; with b; bar"],
++        );
++        check(
++            "let a = { foo = 1; }; b = { bar = 2; }; in with a; with b; f$0",
++            "foo",
++            expect!["(Field) let a = { foo = 1; }; b = { bar = 2; }; in with a; with b; foo"],
++        );
++        check_no("with { foo = 1; }; b$0", "bar");
++    }
++
++    #[test]
++    fn inherit_from_attr() {
++        check(
++            "{ inherit (builtins) g$0; }",
++            "genList",
++            expect!["(BuiltinFunction) { inherit (builtins) genList; }"],
++        );
++        check(
++            "let s = { foo = 1; bar = 2; }; in { inherit (s) f$0; }",
++            "foo",
++            expect!["(Field) let s = { foo = 1; bar = 2; }; in { inherit (s) foo; }"],
++        );
++        check(
++            "let foo = 42; in { inherit f$0; }",
++            "foo",
++            expect!["(LetBinding) let foo = 42; in { inherit foo; }"],
++        );
++    }
+ }
+-- 
+2.54.0
+
