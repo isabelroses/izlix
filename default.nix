@@ -82,6 +82,13 @@ let
           url = "https://gerrit.lix.systems/changes/lix~5441/revisions/7/patch?download&raw";
           hash = "sha256-dbSxogOs6OrfCRCMIoFGUGXl0aeK6O1g4TZI/l/kvMA=";
         })
+
+        # libfetchers/cache: retry inserting entries into the fetcher cache
+        # https://gerrit.lix.systems/c/lix/+/5081
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5081/revisions/1/patch?download&raw";
+          hash = "sha256-g0iJDU9WxJAOymduMJSwrzAxtS8p12ftjcgwJ+Oh9/M=";
+        })
       ];
     };
   };
