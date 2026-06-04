@@ -10,13 +10,15 @@
 let
   sourceInfo = pkgs.callPackage ./misc/hack.nix { };
 
+  version = "2.96.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
+    builtins.substring 0 12 sourceInfo.src.rev
+  }";
+
   scope = pkgs.lixPackageSets.makeLixScope {
     attrName = "izlix";
 
     lix-args = {
-      version = "2.96.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
-        builtins.substring 0 12 sourceInfo.src.rev
-      }";
+      inherit version;
       inherit (sourceInfo) src cargoDeps;
 
       patches = [
@@ -156,6 +158,20 @@ let
       nix-serve-ng = prev.nix-serve-ng.overrideAttrs (prevAttrs: {
         meta.broken = true;
       });
+
+      nix-eval-jobs = prev.nix-eval-jobs.overrideAttrs (prevAttrs: {
+        patchFlags = [ "-p3" ];
+
+        patches = prevAttrs.patches or [ ] ++ [
+          # add the apply flag to nix-eval-jobs
+          # <https://git.lix.systems/lix-project/lix/issues/1214>
+          ./patches/nix-eval-jobs-apply.patch
+        ];
+      });
+
+      nixpkgs-review = prev.nixpkgs-review.override {
+        nix-eval-jobs = final.nix-eval-jobs;
+      };
     }
   );
 in

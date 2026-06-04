@@ -1,0 +1,149 @@
+From a6b695110717197967a60a7b8943d75368132daa Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Thu, 4 Jun 2026 13:02:17 +0100
+Subject: [PATCH] nix-eval-jobs: --apply
+
+Change-Id: Ifba7081b384d18fbdc47437de261d30b65a7930a
+---
+ subprojects/nix-eval-jobs/README.md          |  1 +
+ subprojects/nix-eval-jobs/src/eval-args.cc   |  6 +++
+ subprojects/nix-eval-jobs/src/eval-args.hh   |  1 +
+ subprojects/nix-eval-jobs/src/worker.cc      | 16 +++++++
+ subprojects/nix-eval-jobs/tests/test_eval.py | 46 ++++++++++++++++++++
+ 5 files changed, 70 insertions(+)
+
+diff --git a/subprojects/nix-eval-jobs/README.md b/subprojects/nix-eval-jobs/README.md
+index a0903a53b..0a1bcf5c6 100644
+--- a/subprojects/nix-eval-jobs/README.md
++++ b/subprojects/nix-eval-jobs/README.md
+@@ -46,6 +46,7 @@ executable.
+ $ nix-eval-jobs --help
+ USAGE: nix-eval-jobs [options] expr
+ 
++  --apply                apply the derivation to the provided Nix expression
+   --arg                  Pass the value *expr* as the argument *name* to Nix functions.
+   --argstr               Pass the string *string* as the argument *name* to Nix functions.
+   --check-cache-status   Check if the derivations are present locally or in any configured substituters (i.e. binary cache). The information will be exposed in the `isCached` field of the JSON output.
+diff --git a/subprojects/nix-eval-jobs/src/eval-args.cc b/subprojects/nix-eval-jobs/src/eval-args.cc
+index 9a90ddff3..04dd0a36b 100644
+--- a/subprojects/nix-eval-jobs/src/eval-args.cc
++++ b/subprojects/nix-eval-jobs/src/eval-args.cc
+@@ -105,6 +105,12 @@ MyArgs::MyArgs(nix::AsyncIoRoot & aio) : MixCommonArgs("nix-eval-jobs"), aio_(ai
+              .description = "treat the argument as a Nix expression",
+              .handler = {&fromArgs, true}});
+ 
++    addFlag(
++        {.longName = "apply",
++         .description = "apply the derivation to the provided Nix expression",
++         .labels = {"expr"},
++         .handler = {&applyExpr}});
++
+     // usually in MixFlakeOptions
+     addFlag({
+         .longName = "override-input",
+diff --git a/subprojects/nix-eval-jobs/src/eval-args.hh b/subprojects/nix-eval-jobs/src/eval-args.hh
+index fd197169f..19d3862f0 100644
+--- a/subprojects/nix-eval-jobs/src/eval-args.hh
++++ b/subprojects/nix-eval-jobs/src/eval-args.hh
+@@ -22,6 +22,7 @@ struct MyArgs : virtual public nix::MixEvalArgs,
+ 
+     bool worker = false;
+     std::string releaseExpr;
++    std::string applyExpr;
+     nix::Path gcRootsDir;
+     bool flake = false;
+     bool fromArgs = false;
+diff --git a/subprojects/nix-eval-jobs/src/worker.cc b/subprojects/nix-eval-jobs/src/worker.cc
+index 6efab21d3..9fe289fd2 100644
+--- a/subprojects/nix-eval-jobs/src/worker.cc
++++ b/subprojects/nix-eval-jobs/src/worker.cc
+@@ -28,6 +28,7 @@
+ #include <lix/libexpr/symbol-table.hh>
+ #include <lix/libutil/types.hh>
+ #include <lix/libexpr/value.hh>
++#include <lix/libexpr/value-to-json.hh>
+ #include <lix/libutil/terminal.hh>
+ #include <exception>
+ #include <numeric>
+@@ -202,6 +203,21 @@ try {
+                         maybeConstituents =
+                             readConstituents(&v, state, evaluator);
+                     }
++                    if (args.applyExpr != "") {
++                        nix::Expr &applyExpr = state->ctx.parseExprFromString(
++                            args.applyExpr, nix::CanonPath::fromCwd());
++
++                        nix::Value vApply = state->eval(applyExpr);
++                        nix::Value vRes =
++                            state->callFunction(vApply, v, nix::noPos);
++                        state->forceAttrs(
++                            vRes, nix::noPos,
++                            "apply needs to evaluate to an attrset");
++
++                        nix::NixStringContext context;
++                        reply["extraValue"] = nix::printValueAsJSON(
++                            *state, true, vRes, nix::noPos, context);
++                    }
+                     auto drv = Drv(attrPathS, *state, *drvInfo, args,
+                                    maybeConstituents);
+                     reply.update(drv);
+diff --git a/subprojects/nix-eval-jobs/tests/test_eval.py b/subprojects/nix-eval-jobs/tests/test_eval.py
+index 86d97360c..c8ff30796 100755
+--- a/subprojects/nix-eval-jobs/tests/test_eval.py
++++ b/subprojects/nix-eval-jobs/tests/test_eval.py
+@@ -124,6 +124,52 @@ def test_eval_error() -> None:
+         assert "this is an evaluation error" in attr["error"]
+ 
+ 
++def test_apply() -> None:
++    with TemporaryDirectory() as tempdir:
++        applyExpr = """drv: {
++            the-name = drv.name;
++            version = drv.version or null;
++        }"""
++
++        cmd = [
++            str(BIN),
++            "--gc-roots-dir",
++            tempdir,
++            "--workers",
++            "1",
++            "--apply",
++            applyExpr,
++            "--flake",
++            ".#hydraJobs",
++        ]
++        res = subprocess.run(
++            cmd,
++            cwd=TEST_ROOT.joinpath("assets"),
++            text=True,
++            check=True,
++            stdout=subprocess.PIPE,
++        )
++
++        print(res.stdout)
++        results = [json.loads(r) for r in res.stdout.split("\n") if r]
++
++        assert len(results) == 5  # sanity check that we assert against all jobs
++
++        # Check that nix-eval-jobs applied the expression correctly,
++        # exposing the result under the `extraValue` key, and extracted
++        # 'version' as 'version' and 'name' as 'the-name'
++        assert results[0]["extraValue"]["the-name"] == "job1"
++        assert results[0]["extraValue"]["version"] is None
++        assert results[1]["extraValue"]["the-name"].startswith("nix-")
++        assert results[1]["extraValue"]["version"] is not None
++        assert results[2]["extraValue"]["the-name"] == "package-with-deps"
++        assert results[2]["extraValue"]["version"] is None
++        assert results[3]["extraValue"]["the-name"] == "drvB"
++        assert results[3]["extraValue"]["version"] is None
++        assert results[4]["extraValue"]["the-name"].startswith("nix-")
++        assert results[4]["extraValue"]["version"] is not None
++
++
+ @pytest.mark.infiniterecursion
+ def test_recursion_error() -> None:
+     with TemporaryDirectory() as tempdir:
+-- 
+2.51.2
+
