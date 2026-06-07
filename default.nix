@@ -61,22 +61,22 @@ let
         # the next 3 patches change the repl to a replxx backend
         #
         # https://gerrit.lix.systems/c/lix/+/5534
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5534/revisions/9/patch?download&raw";
-          hash = "sha256-10da554RvZoAcIvyyf8mHRX78Y4uwHoUY7DP5eQAHGI=";
-        })
-
-        # https://gerrit.lix.systems/c/lix/+/5515
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5515/revisions/3/patch?download&raw";
-          hash = "sha256-4lI8TqVogFZ1nZZpLgp3hKY2fCd1oyYT+dFMK4N0Gy8=";
-        })
-
-        # https://gerrit.lix.systems/c/lix/+/5570
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5570/revisions/2/patch?download&raw";
-          hash = "sha256-jsjjhJ6jLBDpg9g6htgLAT20Pi/r521B29Gi4T+fuKY=";
-        })
+        # (pkgs.fetchpatch2 {
+        #   url = "https://gerrit.lix.systems/changes/lix~5534/revisions/9/patch?download&raw";
+        #   hash = "sha256-10da554RvZoAcIvyyf8mHRX78Y4uwHoUY7DP5eQAHGI=";
+        # })
+        #
+        # # https://gerrit.lix.systems/c/lix/+/5515
+        # (pkgs.fetchpatch2 {
+        #   url = "https://gerrit.lix.systems/changes/lix~5515/revisions/3/patch?download&raw";
+        #   hash = "sha256-4lI8TqVogFZ1nZZpLgp3hKY2fCd1oyYT+dFMK4N0Gy8=";
+        # })
+        #
+        # # https://gerrit.lix.systems/c/lix/+/5570
+        # (pkgs.fetchpatch2 {
+        #   url = "https://gerrit.lix.systems/changes/lix~5570/revisions/2/patch?download&raw";
+        #   hash = "sha256-jsjjhJ6jLBDpg9g6htgLAT20Pi/r521B29Gi4T+fuKY=";
+        # })
 
         # fix __structuredAttrs fod url guessing
         # https://gerrit.lix.systems/c/lix/+/5441
@@ -116,20 +116,22 @@ let
           # for build minalloc patch
           pkgs.mimalloc
 
-          # we need to add replxx for the replxx patches. but we also remove
-          # editline from the build so we don't have to bother building lix's
-          # custom editline
-          (pkgs.replxx.overrideAttrs (prev: {
-            src = pkgs.fetchFromForgejo {
-              domain = "git.lix.systems";
-              owner = "lix-project";
-              repo = "replxx";
-              rev = "1f149bfe20bf6e49c1afd4154eaf0032c8c2fda2";
-              hash = "sha256-rXjNicE0Ed5Lwyyv61QAWhDuxIv4208u7//MK67uexc";
-            };
-          }))
+          #   # we need to add replxx for the replxx patches. but we also remove
+          #   # editline from the build so we don't have to bother building lix's
+          #   # custom editline
+          #   (pkgs.replxx.overrideAttrs (prev: {
+          #     src = pkgs.fetchFromForgejo {
+          #       domain = "git.lix.systems";
+          #       owner = "lix-project";
+          #       repo = "replxx";
+          #       rev = "1f149bfe20bf6e49c1afd4154eaf0032c8c2fda2";
+          #       hash = "sha256-rXjNicE0Ed5Lwyyv61QAWhDuxIv4208u7//MK67uexc";
+          #     };
+          #   }))
+          # ]
+          # ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
         ]
-        ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
+        ++ oa.buildInputs;
 
         # these are flakey
         doInstallCheck = false;
