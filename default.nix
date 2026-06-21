@@ -81,13 +81,6 @@ let
         #   hash = "sha256-jsjjhJ6jLBDpg9g6htgLAT20Pi/r521B29Gi4T+fuKY=";
         # })
 
-        # fix __structuredAttrs fod url guessing
-        # https://gerrit.lix.systems/c/lix/+/5441
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~5441/revisions/7/patch?download&raw";
-          hash = "sha256-dbSxogOs6OrfCRCMIoFGUGXl0aeK6O1g4TZI/l/kvMA=";
-        })
-
         # libfetchers/cache: retry inserting entries into the fetcher cache
         # https://gerrit.lix.systems/c/lix/+/5081
         (pkgs.fetchpatch2 {
