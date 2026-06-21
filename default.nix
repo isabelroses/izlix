@@ -50,6 +50,9 @@ let
         # this one isn't *needed* per say but its nice to have for *accuracy* i suppose
         ./patches/libexpr-backport-counter-for-stats.patch
 
+        # don't allocate values in a lamda when _: is the argument
+        ./patches/lixexpr-don-t-allocate-on-_.patch
+
         # nix flake check: Skip substitute derivations
         # https://gerrit.lix.systems/c/lix/+/3841
         # (pkgs.fetchpatch2 {

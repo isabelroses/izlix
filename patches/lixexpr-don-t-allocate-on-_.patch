@@ -1,0 +1,57 @@
+From 79a50b8df7a7b27c2e094d1daef1e351fef134d1 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sun, 21 Jun 2026 19:32:31 +0100
+Subject: [PATCH] lixexpr: don't allocate on _
+---
+ lix/libexpr/eval.cc    | 4 ++++
+ lix/libexpr/nixexpr.cc | 6 ++++++
+ lix/libexpr/nixexpr.hh | 1 +
+ 3 files changed, 11 insertions(+)
+
+diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
+index e9d24f941..dd5836d4e 100644
+--- a/lix/libexpr/eval.cc
++++ b/lix/libexpr/eval.cc
+@@ -1039,6 +1039,10 @@ Env & SimplePattern::match(
+     ExprLambda & lambda, EvalState & state, Env & up, Value & arg, const PosIdx pos
+ )
+ {
++    if (discard) {
++        return up;
++    }
++
+     Env & env2(state.ctx.mem.allocEnv(1));
+     env2.up = &up;
+     env2.values[0] = arg;
+diff --git a/lix/libexpr/nixexpr.cc b/lix/libexpr/nixexpr.cc
+index c31e68141..df8e92b7a 100644
+--- a/lix/libexpr/nixexpr.cc
++++ b/lix/libexpr/nixexpr.cc
+@@ -618,6 +618,12 @@ void VarBinder::visit(ExprList & e, std::unique_ptr<Expr> & ptr)
+ 
+ void VarBinder::visit(ExprLambda & e, std::unique_ptr<Expr> & ptr)
+ {
++    if (auto * sp = dynamic_cast<SimplePattern *>(e.pattern.get()); sp && es.symbols[sp->name] == "_") {
++        sp->discard = true;
++        visit(e.body);
++        return;
++    }
++
+     withEnv(e.pattern->buildEnv(env.get()), [&] {
+         e.pattern->accept(*this);
+         visit(e.body);
+diff --git a/lix/libexpr/nixexpr.hh b/lix/libexpr/nixexpr.hh
+index a2f5bfbf3..eae74202f 100644
+--- a/lix/libexpr/nixexpr.hh
++++ b/lix/libexpr/nixexpr.hh
+@@ -452,6 +452,7 @@ struct Pattern {
+ /** A plain old lambda */
+ struct SimplePattern : Pattern
+ {
++    bool discard = false;
+     SimplePattern() = default;
+     SimplePattern(Symbol name) : Pattern(name) {
+         assert(name);
+-- 
+2.51.2
+
