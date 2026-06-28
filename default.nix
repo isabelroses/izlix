@@ -53,34 +53,6 @@ let
         # don't allocate values in a lamda when _: is the argument
         ./patches/lixexpr-don-t-allocate-on-_.patch
 
-        # nix flake check: Skip substitute derivations
-        # https://gerrit.lix.systems/c/lix/+/3841
-        # (pkgs.fetchpatch2 {
-        #   url = "https://gerrit.lix.systems/changes/lix~3841/revisions/9/patch?download&raw";
-        #   hash = "sha256-LKtEAGYpKzCAbgpsYwDyUF0LFZcCXec+D3nxGs+M2eg=";
-        #   excludes = [ "doc/manual/change-authors.yml" ];
-        # })
-
-        # the next 3 patches change the repl to a replxx backend
-        #
-        # https://gerrit.lix.systems/c/lix/+/5534
-        # (pkgs.fetchpatch2 {
-        #   url = "https://gerrit.lix.systems/changes/lix~5534/revisions/9/patch?download&raw";
-        #   hash = "sha256-10da554RvZoAcIvyyf8mHRX78Y4uwHoUY7DP5eQAHGI=";
-        # })
-        #
-        # # https://gerrit.lix.systems/c/lix/+/5515
-        # (pkgs.fetchpatch2 {
-        #   url = "https://gerrit.lix.systems/changes/lix~5515/revisions/3/patch?download&raw";
-        #   hash = "sha256-4lI8TqVogFZ1nZZpLgp3hKY2fCd1oyYT+dFMK4N0Gy8=";
-        # })
-        #
-        # # https://gerrit.lix.systems/c/lix/+/5570
-        # (pkgs.fetchpatch2 {
-        #   url = "https://gerrit.lix.systems/changes/lix~5570/revisions/2/patch?download&raw";
-        #   hash = "sha256-jsjjhJ6jLBDpg9g6htgLAT20Pi/r521B29Gi4T+fuKY=";
-        # })
-
         # libfetchers/cache: retry inserting entries into the fetcher cache
         # https://gerrit.lix.systems/c/lix/+/5081
         (pkgs.fetchpatch2 {
@@ -100,38 +72,50 @@ let
         ];
       });
 
-      lix = (prev.lix.override { withAWS = false; }).overrideAttrs (oa: {
-        # Kinda funny right
-        # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
-        postPatch = oa.postPatch or "" + ''
-          substituteInPlace lix/libmain/shared.cc \
-            --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
-        '';
+      lix = (prev.lix.override { withAWS = false; }).overrideAttrs (
+        oa:
+        let
+          cxxLinkerFor = stdenv: lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++";
+          hostCargoEnvVar = pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget;
+          buildCargoEnvVar = pkgs.stdenv.buildPlatform.rust.cargoEnvVarTarget;
+        in
+        {
+          # Kinda funny right
+          # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
+          postPatch = oa.postPatch or "" + ''
+            substituteInPlace lix/libmain/shared.cc \
+              --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
+          '';
 
-        buildInputs = [
-          # for build minalloc patch
-          pkgs.mimalloc
+          buildInputs = [
+            # for build minalloc patch
+            pkgs.mimalloc
+          ]
+          ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
 
-          #   # we need to add replxx for the replxx patches. but we also remove
-          #   # editline from the build so we don't have to bother building lix's
-          #   # custom editline
-          #   (pkgs.replxx.overrideAttrs (prev: {
-          #     src = pkgs.fetchFromForgejo {
-          #       domain = "git.lix.systems";
-          #       owner = "lix-project";
-          #       repo = "replxx";
-          #       rev = "1f149bfe20bf6e49c1afd4154eaf0032c8c2fda2";
-          #       hash = "sha256-rXjNicE0Ed5Lwyyv61QAWhDuxIv4208u7//MK67uexc";
-          #     };
-          #   }))
-          # ]
-          # ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
-        ]
-        ++ oa.buildInputs;
+          nativeBuildInputs = [
+            pkgs.cargo
+            pkgs.rustPlatform.cargoSetupHook
+          ]
+          ++ (lib.subtractLists [ pkgs.rust-cbindgen ] oa.nativeBuildInputs);
 
-        # these are flakey
-        doInstallCheck = false;
-      });
+          env =
+            oa.env
+            // {
+              "CARGO_TARGET_${hostCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.clangStdenv;
+            }
+            // lib.optionalAttrs (hostCargoEnvVar != buildCargoEnvVar) {
+              "CARGO_TARGET_${buildCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.buildPackages.clangStdenv;
+            };
+
+          depsBuildBuild = [
+            pkgs.buildPackages.clangStdenv.cc
+          ];
+
+          # these are flakey
+          doInstallCheck = false;
+        }
+      );
 
       nil = prev.nil.overrideAttrs (
         finalAttrs: prevAttrs: {
