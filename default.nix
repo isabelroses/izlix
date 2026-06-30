@@ -148,6 +148,13 @@ let
           # add the apply flag to nix-eval-jobs
           # <https://git.lix.systems/lix-project/lix/issues/1214>
           ./patches/nix-eval-jobs-apply.patch
+
+          # add the --select flag
+          # <https://gerrit.lix.systems/c/lix/+/5730>
+          (pkgs.fetchpatch2 {
+            url = "https://gerrit.lix.systems/changes/lix~5730/revisions/4/patch?download&raw";
+            hash = "sha256-MbRXkYkrCgPGBlcr63S40751FwWtT0wyylxhjMFFQfM=";
+          })
         ];
       });
 

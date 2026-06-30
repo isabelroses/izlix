@@ -49,8 +49,8 @@ index fd197169f..19d3862f0 100644
  
      bool worker = false;
      std::string releaseExpr;
-+    std::string applyExpr;
      nix::Path gcRootsDir;
++    std::string applyExpr;
      bool flake = false;
      bool fromArgs = false;
 diff --git a/subprojects/nix-eval-jobs/src/worker.cc b/subprojects/nix-eval-jobs/src/worker.cc
