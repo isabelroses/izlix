@@ -39,10 +39,6 @@ let
         # - `builtins.mod` will return the remainder of the first argument divided by the second
         ./patches/builtins-mod.patch
 
-        # build against minalloc. port of
-        # <https://github.com/NixOS/nix/pull/15596> for lix
-        ./patches/build-use-minalloc.patch
-
         # backport some of nix's newer eval stats stuff. not sure exactly when they
         # were added (cba to find the diff). so lets add them back. i doubt lix would
         # accept this since it touches json stuff
