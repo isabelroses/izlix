@@ -94,6 +94,9 @@ let
           ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
 
           nativeBuildInputs = [
+            pkgs.cacert
+            pkgs.mdbook-linkcheck2
+
             pkgs.cargo
             pkgs.rustPlatform.cargoSetupHook
           ]
