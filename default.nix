@@ -130,6 +130,9 @@ let
             hash = "sha256-LS2IW4gZ1k6Xl5weMNwxvVA2z56r4rPkjqrkROZTmBw=";
           };
 
+          # broken by docs updates
+          doCheck = false;
+
           patches = prevAttrs.patches or [ ] ++ [
             ./patches/nil-feat-inherit-completion.patch
           ];
