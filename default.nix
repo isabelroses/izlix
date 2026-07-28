@@ -96,7 +96,7 @@ let
             pkgs.cargo
             pkgs.rustPlatform.cargoSetupHook
           ]
-          ++ (lib.subtractLists [ pkgs.rust-cbindgen ] oa.nativeBuildInputs);
+          ++ oa.nativeBuildInputs;
 
           env =
             oa.env
