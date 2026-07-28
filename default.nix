@@ -14,6 +14,22 @@ let
     builtins.substring 0 12 sourceInfo.src.rev
   }";
 
+  licxxbridge = pkgs.buildPackages.rustPlatform.buildRustPackage {
+    pname = "licxxbridge";
+    version = "0.0.0";
+    inherit (sourceInfo) src cargoDeps;
+
+    cargoBuildFlags = [
+      "-p"
+      "licxxbridge"
+    ];
+
+    # only the bridge generator is needed here; skip the workspace test suite
+    doCheck = false;
+
+    meta.mainProgram = "licxxbridge";
+  };
+
   scope = pkgs.lixPackageSets.makeLixScope {
     attrName = "izlix";
 
@@ -106,6 +122,10 @@ let
             // lib.optionalAttrs (hostCargoEnvVar != buildCargoEnvVar) {
               "CARGO_TARGET_${buildCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.buildPackages.clangStdenv;
             };
+
+          mesonFlags = oa.mesonFlags or [ ] ++ [
+            "-Dlicxxbridge=${lib.getExe licxxbridge}"
+          ];
 
           depsBuildBuild = [
             pkgs.buildPackages.clangStdenv.cc
