@@ -90,7 +90,7 @@ let
           cxxLinkerFor =
             stdenv:
             pkgs.writeShellScript "cxx-lld-linker" ''
-              exec ${lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++"} -fuse-ld=lld "$@"
+              exec ${lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++"} ${lib.optionalString stdenv.hostPlatform.isLinux "-fuse-ld=lld"} "$@"
             '';
           hostCargoEnvVar = pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget;
           buildCargoEnvVar = pkgs.stdenv.buildPlatform.rust.cargoEnvVarTarget;
