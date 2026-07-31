@@ -116,7 +116,8 @@ let
 
             pkgs.cargo
             pkgs.rustPlatform.cargoSetupHook
-
+          ]
+          ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux) [
             lldBintools
           ]
           ++ (lib.subtractLists [ pkgs.rust-cbindgen ] oa.nativeBuildInputs);
@@ -130,11 +131,15 @@ let
               "CARGO_TARGET_${buildCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.buildPackages.clangStdenv;
             };
 
-          mesonFlags = oa.mesonFlags or [ ] ++ [
-            "-Dlicxxbridge=${lib.getExe licxxbridge}"
-            "-Dc_link_args=-fuse-ld=lld"
-            "-Dcpp_link_args=-fuse-ld=lld"
-          ];
+          mesonFlags =
+            oa.mesonFlags or [ ]
+            ++ [
+              "-Dlicxxbridge=${lib.getExe licxxbridge}"
+            ]
+            ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux) [
+              "-Dc_link_args=-fuse-ld=lld"
+              "-Dcpp_link_args=-fuse-ld=lld"
+            ];
 
           depsBuildBuild = [
             pkgs.buildPackages.clangStdenv.cc
