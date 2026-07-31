@@ -87,9 +87,14 @@ let
       lix = (prev.lix.override { withAWS = false; }).overrideAttrs (
         oa:
         let
-          cxxLinkerFor = stdenv: lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++";
+          cxxLinkerFor =
+            stdenv:
+            pkgs.writeShellScript "cxx-lld-linker" ''
+              exec ${lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++"} -fuse-ld=lld "$@"
+            '';
           hostCargoEnvVar = pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget;
           buildCargoEnvVar = pkgs.stdenv.buildPlatform.rust.cargoEnvVarTarget;
+          lldBintools = pkgs.wrapBintoolsWith { bintools = pkgs.llvmPackages.bintools; };
         in
         {
           # Kinda funny right
@@ -111,6 +116,8 @@ let
 
             pkgs.cargo
             pkgs.rustPlatform.cargoSetupHook
+
+            lldBintools
           ]
           ++ (lib.subtractLists [ pkgs.rust-cbindgen ] oa.nativeBuildInputs);
 
@@ -125,6 +132,8 @@ let
 
           mesonFlags = oa.mesonFlags or [ ] ++ [
             "-Dlicxxbridge=${lib.getExe licxxbridge}"
+            "-Dc_link_args=-fuse-ld=lld"
+            "-Dcpp_link_args=-fuse-ld=lld"
           ];
 
           depsBuildBuild = [
