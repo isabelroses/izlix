@@ -13,13 +13,13 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "lix-project";
     repo = "lix";
-    rev = "da4a2da865de8b394d2a61f54720990aeef66f1a";
-    hash = "sha256-X39fGaM6bR5ZcAKua8Aqrw9721dUoiRjHFlNDfV/oUE=";
+    rev = "7d47b392c315d2c85ac24d076b72e33862a01616";
+    hash = "sha256-QeDlDehjprjm07ij35ouR3FkqbG6Pim7dQcJ3OIALKc=";
   };
 
   cargoDeps = rustPlatform.fetchCargoVendor {
     name = "lix-${finalAttrs.version}";
     inherit (finalAttrs) src;
-    hash = "sha256-fZ1eDFxgB1TGY9k3/c3AJAE5838s4cyqSpj+qPHtRWg=";
+    hash = "sha256-fLps3kY5g7NkQM4KKWxrbuCiAyCU2McyMoJ8waLOyQU=";
   };
 })
