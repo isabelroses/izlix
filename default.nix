@@ -10,7 +10,7 @@
 let
   sourceInfo = pkgs.callPackage ./misc/hack.nix { };
 
-  version = "2.96.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
+  version = "2.97.0-pre-${lib.concatStrings (lib.takeEnd 3 (lib.splitVersion sourceInfo.version))}-${
     builtins.substring 0 12 sourceInfo.src.rev
   }";
 
