@@ -7,19 +7,19 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "lix-source-info";
-  version = "2.96.0-unstable-2026-10-18";
+  version = "2.96.0-unstable-2026-10-19";
 
   # ideally we want to fetch from gitea, but they seem to have their atom file disabled
   src = fetchFromGitHub {
     owner = "lix-project";
     repo = "lix";
-    rev = "96e92932da1171707f52de4123b246685a72f913";
-    hash = "sha256-bpZ2PHj9EKrQ9uMnxx8GRZ7mdPxBFP8eiO3Tz2B40lE=";
+    rev = "b2b1e2c074ffb57dfbf9291d092067d1d386bbd9";
+    hash = "sha256-z2JN1/ommcM0NOikSn0xG5f6hUHWKYCZ1c1Gy8JxB5g=";
   };
 
   cargoDeps = rustPlatform.fetchCargoVendor {
     name = "lix-${finalAttrs.version}";
     inherit (finalAttrs) src;
-    hash = "sha256-aLLl8Zp9txhAxlBj55lOo25NSz0z33pg1XDdEdCppy8=";
+    hash = "sha256-lEb+u/Vhqgch1eOP0Ls755m3bNunccZcpUX59ypxOMM=";
   };
 })
