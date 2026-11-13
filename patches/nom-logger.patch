@@ -1,0 +1,2114 @@
+From 3c285aa266795559d44272c65288c000ed909a09 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Fri, 13 Nov 2026 20:26:29 +0000
+Subject: [PATCH] libmain: add nom log format
+
+Adds `--log-format nom` and `nom-with-logs`: an in-process logger that
+draws the running builds as a dependency tree with a status table
+underneath.
+
+Also shows duration estimates from earlier builds, per-build CPU usage
+from the build cgroup on Linux, and Nerd Font icons when available.
+---
+ doc/manual/rl-next/nom-log-format.md       |   22 +
+ doc/manual/src/command-ref/opt-common.md   |   11 +
+ lix/libmain/common-args.cc                 |    2 +-
+ lix/libmain/loggers.cc                     |    8 +
+ lix/libmain/meson.build                    |    2 +
+ lix/libmain/nom-logger.cc                  | 1402 ++++++++++++++++++++
+ lix/libmain/nom-logger.hh                  |  244 ++++
+ lix/libutil/log-format.hh                  |   18 +
+ lix/libutil/logging-settings/log-format.md |    2 +-
+ tests/unit/libmain/nom-logger.cc           |  213 +++
+ tests/unit/meson.build                     |    1 +
+ 11 files changed, 1923 insertions(+), 2 deletions(-)
+ create mode 100644 doc/manual/rl-next/nom-log-format.md
+ create mode 100644 lix/libmain/nom-logger.cc
+ create mode 100644 lix/libmain/nom-logger.hh
+ create mode 100644 tests/unit/libmain/nom-logger.cc
+
+diff --git a/doc/manual/rl-next/nom-log-format.md b/doc/manual/rl-next/nom-log-format.md
+new file mode 100644
+index 000000000..d760c8a51
+--- /dev/null
++++ b/doc/manual/rl-next/nom-log-format.md
+@@ -0,0 +1,22 @@
++---
++synopsis: "new `nom` log format"
++cls: []
++category: "Features"
++credits: [isabelroses]
++---
++
++The new `nom` and `nom-with-logs` values of [`log-format`](@docroot@/command-ref/conf-file.md#conf-log-format) draw the running builds and transfers as a tree with a table of status counts beneath it, in the style of the nom output monitor:
++
++```
++╭─ Builds
++├─ ⏵ hello-2.12.2  ⏱ 1m5s (buildPhase)
++│  ╰─ ✔ dependency-1.0  ⏱ 12s
++├─ ↓ breakpad-2024.02.16   ━━━━━━╸─────────────────────   24%  1.2 MiB/5.0 MiB
++┢━ Status      Running   Completed   Waiting   Total
++┃  Builds      ⏵ 1       ✔ 1         ⏸ 3       ∑ 5
++┃  Downloads   ↓ 1       ↓ 3         ⏸ 2       ∑ 6
++┗━ Elapsed ⏱ 1m17s
++```
++
++A finished build is shown beneath the build that uses it, once that one starts.
++Lix does not report which builds are still waiting, so those are only counted.
+diff --git a/doc/manual/src/command-ref/opt-common.md b/doc/manual/src/command-ref/opt-common.md
+index dc7850e78..2d6ab9dc9 100644
+--- a/doc/manual/src/command-ref/opt-common.md
++++ b/doc/manual/src/command-ref/opt-common.md
+@@ -87,6 +87,17 @@ Most commands in Lix accept the following command-line options:
+ 
+     Display the raw logs, with a progress bar and activities each in a new line at the bottom.
+ 
++  - `nom`
++
++    Display a tree of the running builds and transfers with a table of status counts beneath it, in the style of the `nom` output monitor.
++    A finished build is shown beneath the build that uses it.
++    Running builds show an estimate taken from how long earlier builds of the same package took, and on Linux how many cores they keep busy if they run in a cgroup.
++    Glyphs from a Nerd Font are used in terminals known to have one; set the environment variable `NERD_FONTS` to `1` or `0` to override that.
++
++  - `nom-with-logs`
++
++    Display the raw logs, with the tree and the status table at the bottom.
++
+ 
+ - <span id="opt-no-build-output">[`--no-build-output`](#opt-no-build-output)</span> / `-Q`
+ 
+diff --git a/lix/libmain/common-args.cc b/lix/libmain/common-args.cc
+index 36c9469a3..14236b312 100644
+--- a/lix/libmain/common-args.cc
++++ b/lix/libmain/common-args.cc
+@@ -60,7 +60,7 @@ MixCommonArgs::MixCommonArgs(const std::string & programName)
+ 
+     addFlag({
+         .longName = "log-format",
+-        .description = "Set the format of log output; one of `raw`, `internal-json`, `bar`, `bar-with-logs`, `multiline` or `multiline-with-logs`.",
++        .description = "Set the format of log output; one of `raw`, `internal-json`, `bar`, `bar-with-logs`, `multiline`, `multiline-with-logs`, `nom` or `nom-with-logs`.",
+         .category = loggingCategory,
+         .labels = {"format"},
+         .handler = {[&](std::string format) {
+diff --git a/lix/libmain/loggers.cc b/lix/libmain/loggers.cc
+index 12301c392..e0e3fd75d 100644
+--- a/lix/libmain/loggers.cc
++++ b/lix/libmain/loggers.cc
+@@ -1,6 +1,7 @@
+ #include "lix/libutil/environment-variables.hh"
+ #include "lix/libmain/loggers.hh"
+ #include "lix/libmain/progress-bar.hh"
++#include "lix/libmain/nom-logger.hh"
+ #include "lix/libutil/log-format.hh"
+ #include "lix/libutil/config-impl.hh" // IWYU pragma: keep
+ 
+@@ -49,6 +50,13 @@ Logger * getLoggerByFormat(LogFormat logFormat)
+         logger->setPrintBuildLogs(true);
+         return logger;
+     }
++    case LogFormat::Nom:
++        return makeNomLogger();
++    case LogFormat::NomWithLogs: {
++        auto logger = makeNomLogger();
++        logger->setPrintBuildLogs(true);
++        return logger;
++    }
+     default:
+         assert(false && "unreachable");
+     }
+diff --git a/lix/libmain/meson.build b/lix/libmain/meson.build
+index 9242204e1..8ae93f209 100644
+--- a/lix/libmain/meson.build
++++ b/lix/libmain/meson.build
+@@ -3,6 +3,7 @@ liblix_sources += files(
+   'crash-handler.cc',
+   'loggers.cc',
+   'progress-bar.cc',
++  'nom-logger.cc',
+   'shared.cc',
+   'stack.cc',
+ )
+@@ -12,6 +13,7 @@ libmain_headers = files(
+   'crash-handler.hh',
+   'loggers.hh',
+   'progress-bar.hh',
++  'nom-logger.hh',
+   'shared.hh',
+ )
+ 
+diff --git a/lix/libmain/nom-logger.cc b/lix/libmain/nom-logger.cc
+new file mode 100644
+index 000000000..3e82d69d2
+--- /dev/null
++++ b/lix/libmain/nom-logger.cc
+@@ -0,0 +1,1402 @@
++#include "lix/libmain/nom-logger.hh"
++#include "lix/libstore/names.hh"
++#include "lix/libutil/ansicolor.hh"
++#include "lix/libutil/environment-variables.hh"
++#include "lix/libutil/error.hh"
++#include "lix/libutil/file-descriptor.hh"
++#include "lix/libutil/file-system.hh"
++#include "lix/libutil/strings.hh"
++#include "lix/libutil/terminal.hh"
++#include "lix/libutil/thread-name.hh"
++#include "lix/libutil/users.hh"
++
++#include <algorithm>
++#include <array>
++#include <fcntl.h>
++#include <functional>
++#include <iostream>
++#include <set>
++#include <sstream>
++#include <unistd.h>
++
++namespace nix {
++
++using namespace std::literals::chrono_literals;
++
++namespace {
++
++// 100 years ought to be enough for anyone (yet sufficiently smaller than max() to not cause signed
++// integer overflow).
++constexpr auto A_LONG_TIME =
++    std::chrono::duration_cast<std::chrono::milliseconds>(100 * 365 * std::chrono::seconds(86400));
++
++/** Rows and timers stay hidden until they carry useful elapsed time. */
++constexpr auto SHOW_AFTER = 1s;
++/**
++ * How long a finished build that nothing consumes yet stays in the tree.
++ * Longer than `SHOW_AFTER`, so that it is still there when the row of a
++ * consumer that starts right away appears.
++ */
++constexpr auto LINGER = 2s;
++/** How far back a reported failure may be pinned on a stopped build. */
++constexpr auto FAILURE_WINDOW = 5s;
++/** How many durations the history keeps per package and host. */
++constexpr size_t HISTORY_DEPTH = 10;
++/** How many lines of superseded history are put up with before a cleanup. */
++constexpr size_t HISTORY_SLACK = 256;
++/** How often the cgroup tree is searched before concluding there are none. */
++constexpr unsigned CGROUP_SEARCHES = 3;
++/** How deep in the cgroup tree the builds of a daemon may sit. */
++constexpr int CGROUP_DEPTH = 6;
++constexpr auto CPU_INTERVAL = 1s;
++/** Redraw interval while a busy bar is bouncing. */
++constexpr auto FAST_TICK = 100ms;
++/** Redraw interval otherwise, for timers and for rows that come and go. */
++constexpr auto SLOW_TICK = 500ms;
++
++constexpr size_t BAR_WIDTH = 28;
++constexpr size_t MIN_BAR_WIDTH = 8;
++constexpr size_t NAME_WIDTH = 44;
++constexpr size_t MIN_NAME_WIDTH = 12;
++constexpr size_t STATUS_WIDTH = 24;
++
++// Plain colours rather than the bold ones of ansicolor.hh, to leave the
++// weight of the tree to the glyphs.
++constexpr const char * C_TEXT = "";
++constexpr const char * C_RUNNING = "\e[33m";
++constexpr const char * C_COMPLETED = "\e[32m";
++constexpr const char * C_PLANNED = "\e[34m";
++constexpr const char * C_FAILED = "\e[31m";
++constexpr const char * C_MUTED = "\e[90m";
++constexpr const char * C_HOST = "\e[35m";
++constexpr const char * C_TIMER = "\e[37m";
++constexpr const char * C_DOWNLOAD = "\e[36m";
++constexpr const char * C_UPLOAD = "\e[35m";
++constexpr const char * C_LOG_PREFIX = "\e[38;5;67m";
++
++constexpr NomLogger::Icons UNICODE_ICONS{
++    .running = "⏵",
++    .done = "✔",
++    .planned = "⏸",
++    .failed = "✗",
++    .download = "↓",
++    .upload = "↑",
++    .clock = "⏱",
++    .estimate = "∅",
++    .cpu = "⚙",
++    .summary = "∑",
++};
++
++/** From Font Awesome, which every Nerd Font carries at these code points. */
++constexpr NomLogger::Icons NERD_ICONS{
++    .running = "\uf04b",
++    .done = "\uf00c",
++    .planned = "\uf04c",
++    .failed = "\uf00d",
++    .download = "\uf019",
++    .upload = "\uf093",
++    .clock = "\uf017",
++    .estimate = "\uf252",
++    .cpu = "\uf2db",
++    .summary = "∑",
++};
++
++/** A no-break space, so that terminals do not widen the icon before it. */
++constexpr const char * GAP = " ";
++
++/** Brackets of a synchronized update, which the terminal shows in one go. */
++constexpr const char * SYNC_BEGIN = "\e[?2026h";
++constexpr const char * SYNC_END = "\e[?2026l";
++
++std::string_view getS(const Logger::Fields & fields, size_t n)
++{
++    assert(n < fields.size());
++    assert(fields[n].type == Logger::Field::tString);
++    return fields[n].s;
++}
++
++uint64_t getI(const Logger::Fields & fields, size_t n)
++{
++    assert(n < fields.size());
++    assert(fields[n].type == Logger::Field::tInt);
++    return fields[n].i;
++}
++
++std::string storePathToName(std::string_view path)
++{
++    auto base = baseNameOf(path);
++    auto i = base.find('-');
++    auto name = i == std::string::npos ? base.substr(0, 0) : base.substr(i + 1);
++    if (name.ends_with(".drv")) {
++        name.remove_suffix(4);
++    }
++    return std::string(name);
++}
++
++bool isLocalUri(std::string_view uri)
++{
++    return uri.starts_with("local") || uri.starts_with("daemon") || uri.starts_with("unix");
++}
++
++/**
++ * The derivations a derivation depends on, scraped from its file without
++ * parsing it. Empty if the file cannot be read from here, as with a store
++ * on another machine; the tree is flat then.
++ */
++std::set<std::string> readInputDrvs(const std::string & drvPath)
++{
++    std::set<std::string> res;
++    if (!drvPath.ends_with(".drv")) {
++        return res;
++    }
++
++    std::string content;
++    try {
++        content = readFile(drvPath);
++    } catch (SysError &) {
++        return res;
++    }
++
++    auto needle = "\"" + dirOf(drvPath) + "/";
++    for (size_t pos = 0; (pos = content.find(needle, pos)) != std::string::npos;) {
++        auto end = content.find('"', pos + 1);
++        if (end == std::string::npos) {
++            break;
++        }
++        auto path = content.substr(pos + 1, end - pos - 1);
++        if (path.ends_with(".drv")) {
++            res.insert(std::move(path));
++        }
++        pos = end + 1;
++    }
++    return res;
++}
++
++std::string paint(const char * color, std::string_view s)
++{
++    if (s.empty() || *color == 0) {
++        return std::string(s);
++    }
++    return concatStrings(color, s, ANSI_NORMAL);
++}
++
++/** Terminal columns of text without escape sequences, one per code point. */
++size_t displayWidth(std::string_view s)
++{
++    return std::count_if(s.begin(), s.end(), [](char c) { return (c & 0xc0) != 0x80; });
++}
++
++/** Shortens ASCII text to `width` columns, keeping the head and the tail. */
++std::string truncateMiddle(std::string_view s, size_t width)
++{
++    if (s.size() <= width) {
++        return std::string(s);
++    }
++    if (width < 8) {
++        return std::string(s.substr(0, width));
++    }
++    auto tail = std::min<size_t>(width / 3, 12);
++    return concatStrings(s.substr(0, width - tail - 1), "…", s.substr(s.size() - tail));
++}
++
++std::string repeat(std::string_view s, size_t n)
++{
++    std::string res;
++    res.reserve(s.size() * n);
++    for (size_t i = 0; i < n; i++) {
++        res += s;
++    }
++    return res;
++}
++
++uint64_t wholeSeconds(NomLogger::Clock::duration d)
++{
++    return std::max<int64_t>(0, std::chrono::duration_cast<std::chrono::seconds>(d).count());
++}
++
++std::string formatDuration(uint64_t secs)
++{
++    if (secs < 60) {
++        return fmt("%ds", secs);
++    } else if (secs < 3600) {
++        return fmt("%dm%ds", secs / 60, secs % 60);
++    } else {
++        return fmt("%dh%dm", secs / 3600, (secs % 3600) / 60);
++    }
++}
++
++std::string formatBytes(uint64_t bytes)
++{
++    static constexpr std::array units{"B", "KiB", "MiB", "GiB", "TiB"};
++    double value = bytes;
++    size_t unit = 0;
++    while (value >= 1024 && unit + 1 < units.size()) {
++        value /= 1024;
++        unit++;
++    }
++    if (unit == 0) {
++        return fmt("%d B", bytes);
++    }
++    return fmt(value >= 10 ? "%.0f %s" : "%.1f %s", value, units[unit]);
++}
++
++/** An icon and the text it belongs to. */
++std::string tag(const char * icon, std::string_view text)
++{
++    return concatStrings(icon, GAP, text);
++}
++
++std::string timer(const char * icon, uint64_t secs)
++{
++    return paint(C_TIMER, tag(icon, formatDuration(secs)));
++}
++
++std::string historyLine(std::string_view package, std::string_view host, uint64_t secs)
++{
++    return fmt("%s\t%s\t%d\n", package, host, secs);
++}
++
++/** Adds a duration to those of one package, forgetting the oldest if need be. */
++void remember(std::vector<uint64_t> & past, uint64_t secs)
++{
++    past.push_back(secs);
++    if (past.size() > HISTORY_DEPTH) {
++        past.erase(past.begin());
++    }
++}
++
++/** The cgroup Lix made for the build of the derivation with this hash. */
++std::optional<std::filesystem::path> findBuildCgroup(
++    const std::filesystem::path & root,
++    std::optional<std::filesystem::path> & parent,
++    const std::string & drvHash
++)
++{
++    namespace fs = std::filesystem;
++    auto prefix = "nix-build@" + drvHash + "-";
++    auto matches = [&](const fs::directory_entry & entry) {
++        std::error_code ec;
++        return entry.is_directory(ec) && entry.path().filename().string().starts_with(prefix);
++    };
++
++    std::error_code ec;
++    if (parent) {
++        for (fs::directory_iterator i(*parent, ec), end; !ec && i != end; i.increment(ec)) {
++            if (matches(*i)) {
++                return i->path();
++            }
++        }
++        return {};
++    }
++
++    // They all sit next to each other, so this search is only needed once.
++    auto options = fs::directory_options::skip_permission_denied;
++    for (fs::recursive_directory_iterator i(root, options, ec), end; !ec && i != end;
++         i.increment(ec))
++    {
++        if (matches(*i)) {
++            parent = i->path().parent_path();
++            return i->path();
++        }
++        if (i.depth() >= CGROUP_DEPTH) {
++            i.disable_recursion_pending();
++        }
++    }
++    return {};
++}
++
++/** Total CPU time used by everything in a cgroup so far, in microseconds. */
++std::optional<uint64_t> readCpuUsec(const std::filesystem::path & cgroup)
++{
++    std::string stat;
++    try {
++        stat = readFile((cgroup / "cpu.stat").string());
++    } catch (SysError &) {
++        return {};
++    }
++    constexpr std::string_view prefix = "usage_usec ";
++    for (auto & line : tokenizeString<std::vector<std::string>>(stat, "\n")) {
++        if (line.starts_with(prefix)) {
++            return string2Int<uint64_t>(std::string_view(line).substr(prefix.size()));
++        }
++    }
++    return {};
++}
++
++uint64_t median(std::vector<uint64_t> values)
++{
++    std::sort(values.begin(), values.end());
++    return values[values.size() / 2];
++}
++
++/** Heavy line for the finished part, a half cell, then a light track. */
++std::string progressBar(uint64_t done, uint64_t total, size_t width, const char * color)
++{
++    auto halves = std::min(done, total) * (width * 2) / total;
++    size_t filled = halves / 2;
++    bool half = halves % 2 == 1;
++    return paint(color, repeat("━", filled) + (half ? "╸" : ""))
++        + paint(C_MUTED, repeat("─", width - filled - half));
++}
++
++/** A segment bouncing along the track, for transfers of unknown size. */
++std::string busyBar(NomLogger::Clock::duration age, size_t width, const char * color)
++{
++    size_t segment = std::max<size_t>(width / 5, 2);
++    size_t travel = width - segment;
++    auto ms = std::max<int64_t>(
++        0, std::chrono::duration_cast<std::chrono::milliseconds>(age).count()
++    );
++    size_t step = (static_cast<size_t>(ms) * 8 / 1000) % std::max<size_t>(travel * 2, 1);
++    size_t offset = step > travel ? travel * 2 - step : step;
++    return paint(C_MUTED, repeat("─", offset))
++        + paint(color, "╺" + repeat("━", segment - 2) + "╸")
++        + paint(C_MUTED, repeat("─", travel - offset));
++}
++
++/** One line of the tree, before it is laid out. */
++struct Row
++{
++    std::string prefix;
++    const char * icon;
++    const char * color;
++    std::string name;
++    /** Already coloured text that follows the name. */
++    std::string suffix;
++    /** Whether this is unfinished work, for the overflow line. */
++    bool active = true;
++    /** Transfers get a bar and their names padded into a column. */
++    bool transfer = false;
++    uint64_t done = 0, expected = 0;
++    NomLogger::Clock::duration age{};
++};
++
++struct Cell
++{
++    std::string text;
++    const char * color = C_TEXT;
++};
++
++Cell countCell(const char * icon, const char * color, uint64_t n)
++{
++    return {tag(icon, fmt("%d", n)), color};
++}
++
++}
++
++NomLogger::NomLogger(bool isTTY)
++    : NomLogger(isTTY, Options{})
++{
++}
++
++NomLogger::NomLogger(bool isTTY, Options options)
++    : isTTY(isTTY)
++    , options(std::move(options))
++    , icons(this->options.nerdIcons ? NERD_ICONS : UNICODE_ICONS)
++{
++    resume();
++}
++
++NomLogger::~NomLogger()
++{
++    pause();
++}
++
++void NomLogger::pause()
++{
++    if (!isTTY) {
++        saveHistory(*state_.lock());
++        return;
++    }
++    {
++        auto state(state_.lock());
++        state->paused++;
++        if (state->paused > 1) {
++            return; // recursive pause, the update thread is already gone
++        }
++        updateCV.notify_one();
++        quitCV.notify_one();
++    }
++    updateThread.join();
++
++    auto state(state_.lock());
++    saveHistory(*state);
++    auto status = finalStatus(*state, Clock::now());
++    if (!status.empty()) {
++        writeLogsToStderr(status + "\n");
++        state->dirty = false;
++        state->sessionStart.reset();
++    }
++}
++
++void NomLogger::resetProgress()
++{
++    auto state(state_.lock());
++    saveHistory(*state);
++    auto prevPaused = state->paused;
++    auto prevLines = state->lastLines;
++    *state = State{
++        .lastLines = prevLines,
++        .paused = prevPaused,
++    };
++    update(*state);
++}
++
++void NomLogger::resume()
++{
++    if (!isTTY) {
++        return;
++    }
++    auto state(state_.lock());
++    assert(state->paused > 0); // should be paused
++    state->paused--;
++    if (state->paused > 0) {
++        return; // recursive pause, wait for the parents to resume too
++    }
++    state->haveUpdate = true;
++    updateThread = std::thread([&]() {
++        setCurrentThreadName("nom logger");
++        auto state(state_.lock());
++        while (state->paused == 0) {
++            if (!state->haveUpdate) {
++                // Timers and lingering rows change without anyone telling us.
++                bool ticking = !state->activities.empty() || state->lastLines > 0;
++                state.wait_for(
++                    updateCV,
++                    !ticking ? A_LONG_TIME : state->animated ? FAST_TICK : SLOW_TICK
++                );
++            }
++            draw(*state, false);
++            state.wait_for(quitCV, std::chrono::milliseconds(50));
++        }
++        writeLogsToStderr(SYNC_BEGIN);
++        erase(*state);
++        writeLogsToStderr(SYNC_END);
++    });
++}
++
++bool NomLogger::isVerbose()
++{
++    return printBuildLogs;
++}
++
++Logger::BufferState NomLogger::log(Verbosity lvl, std::string_view s)
++{
++    if (lvl > getVerbosity()) {
++        return BufferState::HasSpace;
++    }
++    auto state(state_.lock());
++    return log(*state, s);
++}
++
++Logger::BufferState NomLogger::logEI(const ErrorInfo & ei)
++{
++    auto state(state_.lock());
++
++    std::stringstream oss;
++    showErrorInfo(oss, ei, loggerSettings.showTrace.get());
++
++    return log(*state, oss.str());
++}
++
++Logger::BufferState NomLogger::log(State & state, std::string_view s)
++{
++    if (state.paused == 0) {
++        writeLogsToStderr(SYNC_BEGIN);
++        erase(state);
++    }
++    writeLogsToStderr(filterANSIEscapes(s + ANSI_NORMAL "\n", !isTTY));
++    restore(state);
++    return BufferState::HasSpace;
++}
++
++Logger::BufferState NomLogger::startActivityImpl(
++    ActivityId act,
++    Verbosity lvl,
++    ActivityType type,
++    const std::string & s,
++    const Fields & fields,
++    ActivityId parent
++)
++{
++    // Read the derivation before taking the lock, the file may be large.
++    std::set<std::string> inputDrvs;
++    if (type == actBuild) {
++        inputDrvs = readInputDrvs(std::string(getS(fields, 0)));
++    }
++
++    auto state(state_.lock());
++
++    if (lvl <= getVerbosity() && !s.empty() && type != actBuildWaiting) {
++        (void) log(*state, s + "...");
++    }
++
++    auto now = Clock::now();
++    if (!state->sessionStart) {
++        state->sessionStart = now;
++    }
++
++    ActInfo info{.type = type, .parent = parent, .start = now};
++
++    switch (type) {
++    case actBuild: {
++        auto drvPath = std::string(getS(fields, 0));
++
++        auto index = state->builds.size();
++        auto name = storePathToName(drvPath);
++        auto drvBase = baseNameOf(drvPath);
++        state->builds.push_back({
++            .name = name,
++            .host = std::string(getS(fields, 1)),
++            .package = DrvName(name).name,
++            .drvHash = std::string(drvBase.substr(0, drvBase.find('-'))),
++            .start = now,
++        });
++        {
++            loadHistory(*state);
++            auto & build = state->builds[index];
++            auto past = state->history.find({build.package, build.host});
++            if (past != state->history.end() && !past->second.empty()) {
++                build.estimate = median(past->second);
++            }
++        }
++        for (auto & input : inputDrvs) {
++            if (auto i = state->buildsByDrv.find(input); i != state->buildsByDrv.end()) {
++                state->builds[i->second].parent = index;
++            }
++        }
++        state->buildsByDrv.insert_or_assign(drvPath, index);
++        info.build = index;
++        info.name = state->builds[index].name;
++        state->dirty = true;
++        break;
++    }
++
++    case actSubstitute: {
++        info.row = RowKind::Download;
++        info.name = storePathToName(getS(fields, 0));
++        if (auto sub = getS(fields, 1); !isLocalUri(sub)) {
++            info.host = sub;
++        }
++        state->sawDownload = true;
++        state->dirty = true;
++        break;
++    }
++
++    case actCopyPath: {
++        // The substitution this copy belongs to has the row already.
++        if (hasAncestor(*state, actSubstitute, parent)) {
++            break;
++        }
++        auto src = getS(fields, 1), dst = getS(fields, 2);
++        bool upload = isLocalUri(src) && !isLocalUri(dst);
++        info.row = upload ? RowKind::Upload : RowKind::Download;
++        info.name = storePathToName(getS(fields, 0));
++        if (auto remote = upload ? dst : src; !isLocalUri(remote)) {
++            info.host = remote;
++        }
++        (upload ? state->sawUpload : state->sawDownload) = true;
++        state->dirty = true;
++        break;
++    }
++
++    case actFileTransfer: {
++        if (hasAncestor(*state, actCopyPath, parent)
++            || hasAncestor(*state, actSubstitute, parent)
++            || hasAncestor(*state, actQueryPathInfo, parent))
++        {
++            break;
++        }
++        info.row = s.starts_with("uploading") ? RowKind::Upload : RowKind::Download;
++        info.name = getS(fields, 0);
++        break;
++    }
++
++    case actPostBuildHook:
++        info.row = RowKind::Generic;
++        info.name = "post-build " + storePathToName(getS(fields, 0));
++        break;
++
++    case actBuildWaiting:
++        info.row = RowKind::Waiting;
++        info.name = filterANSIEscapes(s, true);
++        break;
++
++    case actQueryPathInfo:
++        break;
++
++    case actUnknown:
++    case actRealise:
++    case actCopyPaths:
++    case actBuilds:
++    case actOptimiseStore:
++    case actVerifyPaths:
++        if (!s.empty() && s != "daemon connection") {
++            info.row = RowKind::Generic;
++            info.name = filterANSIEscapes(s, true);
++        }
++        break;
++    }
++
++    state->activities.insert_or_assign(act, std::move(info));
++
++    update(*state);
++    return BufferState::HasSpace;
++}
++
++/* Check whether an activity has an ancestor with the specified
++   type. */
++bool NomLogger::hasAncestor(State & state, ActivityType type, ActivityId act)
++{
++    while (act != 0) {
++        auto i = state.activities.find(act);
++        if (i == state.activities.end()) {
++            break;
++        }
++        if (i->second.type == type) {
++            return true;
++        }
++        act = i->second.parent;
++    }
++    return false;
++}
++
++Logger::BufferState NomLogger::stopActivityImpl(ActivityId act)
++{
++    auto state(state_.lock());
++
++    auto i = state->activities.find(act);
++    if (i != state->activities.end()) {
++        auto & info = i->second;
++
++        auto & totals = state->totals[info.type];
++        totals.done += info.done;
++        totals.failed += info.failed;
++
++        for (auto & [type, expected] : info.expectedByType) {
++            state->totals[type].expected -= expected;
++        }
++
++        if (info.build) {
++            // Whether it failed is only known once the totals are updated.
++            auto & build = state->builds[*info.build];
++            build.status = BuildStatus::Done;
++            build.stop = Clock::now();
++        }
++
++        state->activities.erase(i);
++    }
++
++    update(*state);
++    return BufferState::HasSpace;
++}
++
++Logger::BufferState
++NomLogger::resultImpl(ActivityId act, ResultType type, const std::vector<Field> & fields)
++{
++    auto state(state_.lock());
++
++    auto i = state->activities.find(act);
++    if (i == state->activities.end()) {
++        return BufferState::HasSpace;
++    }
++    auto & info = i->second;
++
++    if (type == resBuildLogLine || type == resPostBuildLogLine) {
++        auto line = chomp(getS(fields, 0));
++        if (!line.empty() && (printBuildLogs || type == resPostBuildLogLine)) {
++            auto prefix = info.name.empty() ? "unnamed" : info.name;
++            prefix += type == resPostBuildLogLine ? " (post)> " : "> ";
++            (void) log(*state, paint(C_LOG_PREFIX, prefix) + line);
++        }
++    }
++
++    else if (type == resSetPhase) {
++        if (info.build) {
++            state->builds[*info.build].phase = getS(fields, 0);
++        }
++        update(*state);
++    }
++
++    else if (type == resProgress) {
++        info.done = getI(fields, 0);
++        info.expected = getI(fields, 1);
++        info.running = getI(fields, 2);
++        info.failed = getI(fields, 3);
++
++        if (info.type == actCopyPath || info.type == actFileTransfer) {
++            // A substitution shows the progress of the copy it wraps.
++            auto * shown = &info;
++            if (auto p = state->activities.find(info.parent);
++                info.type == actCopyPath && p != state->activities.end()
++                && p->second.type == actSubstitute)
++            {
++                shown = &p->second;
++            }
++            shown->xferDone = info.done;
++            shown->xferExpected = info.expected;
++        }
++
++        if (info.type == actBuilds) {
++            // Activities do not say how they ended, only the totals do. Pin
++            // each new failure on the build that stopped last.
++            auto failed = tally(*state, actBuilds).failed;
++            auto now = Clock::now();
++            for (; state->failuresAssigned < failed; state->failuresAssigned++) {
++                auto build = std::find_if(
++                    state->builds.rbegin(),
++                    state->builds.rend(),
++                    [&](const Build & b) {
++                        return b.status == BuildStatus::Done && now - b.stop < FAILURE_WINDOW;
++                    }
++                );
++                if (build != state->builds.rend()) {
++                    build->status = BuildStatus::Failed;
++                }
++            }
++        }
++
++        update(*state);
++    }
++
++    else if (type == resSetExpected) {
++        auto expectedType = static_cast<ActivityType>(getI(fields, 0));
++        auto & expected = info.expectedByType[expectedType];
++        state->totals[expectedType].expected -= expected;
++        expected = getI(fields, 1);
++        state->totals[expectedType].expected += expected;
++        update(*state);
++    }
++
++    return BufferState::HasSpace;
++}
++
++void NomLogger::update(State & state)
++{
++    state.haveUpdate = true;
++    updateCV.notify_one();
++}
++
++void NomLogger::erase(State & state)
++{
++    if (state.lastLines >= 1) {
++        writeLogsToStderr(fmt("\e[G\e[%dF\e[J", state.lastLines));
++    }
++    state.lastLines = 0;
++}
++
++void NomLogger::restore(State & state)
++{
++    if (state.paused > 0) {
++        return;
++    }
++    // Build logs come in by the thousands of lines. The frame is brought up
++    // to date by the update thread soon enough.
++    writeLogsToStderr(state.lastFrame);
++    writeLogsToStderr(SYNC_END);
++    state.lastLines = state.lastFrameLines;
++}
++
++void NomLogger::draw(State & state, bool force)
++{
++    state.haveUpdate = false;
++    if (state.paused > 0) {
++        return; // when paused, the frame should not actually be shown
++    }
++
++    auto [rows, columns] = getWindowSize();
++    size_t width = columns > 0 ? columns : 80;
++    size_t height = rows > 0 ? rows : 25;
++
++    std::string frame;
++    int lines = 0;
++    auto now = Clock::now();
++    sampleCpu(state, now);
++    for (auto & line : renderFrame(state, now, width, height)) {
++        frame += filterANSIEscapes(line, false, width) + ANSI_NORMAL "\n";
++        lines++;
++    }
++
++    // Timers make this run several times a second, mostly for nothing.
++    if (!force && frame == state.lastFrame && state.lastLines == lines) {
++        return;
++    }
++
++    writeLogsToStderr(SYNC_BEGIN);
++    erase(state);
++    writeLogsToStderr(frame);
++    writeLogsToStderr(SYNC_END);
++    state.lastLines = state.lastFrameLines = lines;
++    state.lastFrame = std::move(frame);
++}
++
++NomLogger::Counts NomLogger::tally(State & state, ActivityType type)
++{
++    auto & totals = state.totals[type];
++    Counts res{.done = totals.done, .expected = totals.done, .failed = totals.failed};
++    for (auto & [id, info] : state.activities) {
++        if (info.type != type) {
++            continue;
++        }
++        res.done += info.done;
++        res.expected += info.expected;
++        res.running += info.running;
++        res.failed += info.failed;
++    }
++    res.expected = std::max(res.expected, totals.expected);
++    return res;
++}
++
++std::vector<std::string> NomLogger::renderLegend(State & state, TimePoint now, size_t width)
++{
++    auto builds = tally(state, actBuilds);
++    auto copies = tally(state, actCopyPaths);
++    // Failed builds are no longer expected, failed copies still are.
++    auto buildTotal = builds.expected + builds.failed;
++    auto copyTotal = std::max(copies.expected, copies.done + copies.running + copies.failed);
++    bool showFailed = builds.failed > 0 || copies.failed > 0;
++
++    auto waiting = [](uint64_t total, const Counts & c) {
++        auto settled = c.done + c.running + c.failed;
++        return total > settled ? total - settled : 0;
++    };
++
++    std::vector<std::vector<Cell>> grid;
++    auto addRow = [&](std::vector<Cell> cells, Cell failed, Cell total) {
++        if (showFailed) {
++            cells.push_back(std::move(failed));
++        }
++        cells.push_back(std::move(total));
++        grid.push_back(std::move(cells));
++    };
++
++    if (buildTotal > 0) {
++        addRow(
++            {
++                {"Builds"},
++                countCell(icons.running, C_RUNNING, builds.running),
++                countCell(icons.done, C_COMPLETED, builds.done),
++                countCell(icons.planned, C_PLANNED, waiting(buildTotal, builds)),
++            },
++            countCell(icons.failed, C_FAILED, builds.failed),
++            countCell(icons.summary, C_TEXT, buildTotal)
++        );
++    }
++    if (copyTotal > 0) {
++        bool upload = state.sawUpload && !state.sawDownload;
++        auto icon = upload ? icons.upload : icons.download;
++        auto color = upload ? C_UPLOAD : C_DOWNLOAD;
++        addRow(
++            {
++                {upload ? "Uploads" : "Downloads"},
++                countCell(icon, color, copies.running),
++                countCell(icon, color, copies.done),
++                countCell(icons.planned, C_PLANNED, waiting(copyTotal, copies)),
++            },
++            copies.failed > 0 ? countCell(icons.failed, C_FAILED, copies.failed) : Cell{},
++            countCell(icons.summary, C_TEXT, copyTotal)
++        );
++    }
++
++    auto elapsed = state.sessionStart ? wholeSeconds(now - *state.sessionStart) : 0;
++    auto elapsedRow = "Elapsed " + timer(icons.clock, elapsed);
++
++    std::vector<std::string> res;
++    if (grid.empty()) {
++        res.push_back(paint(C_MUTED, "┕━ ") + elapsedRow);
++        return res;
++    }
++
++    {
++        std::vector<Cell> header{{"Status"}, {"Running"}, {"Completed"}, {"Waiting"}};
++        if (showFailed) {
++            header.push_back({"Failed"});
++        }
++        header.push_back({"Total"});
++        grid.insert(grid.begin(), std::move(header));
++    }
++
++    std::vector<size_t> widths(grid[0].size());
++    for (auto & row : grid) {
++        for (size_t i = 0; i < row.size(); i++) {
++            widths[i] = std::max(widths[i], displayWidth(row[i].text));
++        }
++    }
++
++    // Tighten the columns if the roomy table does not fit.
++    size_t total = 3;
++    for (auto w : widths) {
++        total += w + 3;
++    }
++    size_t gap = total - 3 <= width ? 3 : 1;
++
++    for (size_t r = 0; r < grid.size(); r++) {
++        auto line = paint(C_MUTED, r == 0 ? "┢━ " : "┃  ");
++        for (size_t i = 0; i < grid[r].size(); i++) {
++            auto & cell = grid[r][i];
++            line += paint(cell.color, cell.text);
++            if (i + 1 < grid[r].size()) {
++                line += std::string(widths[i] - displayWidth(cell.text) + gap, ' ');
++            }
++        }
++        res.push_back(std::move(line));
++    }
++    res.push_back(paint(C_MUTED, "┗━ ") + elapsedRow);
++    return res;
++}
++
++std::vector<std::string>
++NomLogger::renderFrame(State & state, TimePoint now, size_t width, size_t height)
++{
++    auto & builds = state.builds;
++    state.animated = false;
++
++    // Which builds are in the tree. Something that consumes a build always
++    // starts after it, so parents are settled before their children here.
++    std::vector<bool> visible(builds.size());
++    size_t shownBuilds = 0;
++    for (size_t i = builds.size(); i-- > 0;) {
++        auto & b = builds[i];
++        visible[i] = b.status == BuildStatus::Running ? now - b.start >= SHOW_AFTER
++            : b.status == BuildStatus::Failed || now - b.stop < LINGER
++                || (b.parent && visible[*b.parent]);
++        shownBuilds += visible[i];
++    }
++
++    std::vector<Row> transfers, others;
++    for (auto & [id, info] : state.activities) {
++        if (info.row == RowKind::None || info.name.empty() || now - info.start < SHOW_AFTER) {
++            continue;
++        }
++        switch (info.row) {
++        case RowKind::Download:
++        case RowKind::Upload: {
++            bool upload = info.row == RowKind::Upload;
++            Row row{
++                .prefix = "├─ ",
++                .icon = upload ? icons.upload : icons.download,
++                .color = upload ? C_UPLOAD : C_DOWNLOAD,
++                .name = info.name,
++                .transfer = true,
++                .done = info.xferDone,
++                .expected = info.xferExpected,
++                .age = now - info.start,
++            };
++            if (info.xferExpected > 0) {
++                row.suffix = fmt(
++                    "%3d%%  %s/%s",
++                    std::min(info.xferDone, info.xferExpected) * 100 / info.xferExpected,
++                    formatBytes(info.xferDone),
++                    formatBytes(info.xferExpected)
++                );
++            } else if (info.xferDone > 0) {
++                row.suffix = formatBytes(info.xferDone);
++            }
++            if (!info.host.empty()) {
++                row.suffix += (row.suffix.empty() ? "" : "  ") + paint(C_HOST, info.host);
++            }
++            transfers.push_back(std::move(row));
++            break;
++        }
++        case RowKind::Waiting:
++            others.push_back({
++                .prefix = "├─ ",
++                .icon = icons.planned,
++                .color = C_PLANNED,
++                .name = info.name,
++            });
++            break;
++        case RowKind::None:
++        case RowKind::Generic:
++            others.push_back({
++                .prefix = "├─ ",
++                .icon = icons.running,
++                .color = C_MUTED,
++                .name = info.name,
++                .suffix = "  " + timer(icons.clock, wholeSeconds(now - info.start)),
++            });
++            break;
++        }
++    }
++
++    if (shownBuilds + transfers.size() + others.size() == 0 && !state.dirty) {
++        return {};
++    }
++
++    auto legend = renderLegend(state, now, width);
++
++    // Leave a line for the header and one for the cursor below the frame.
++    size_t reserved = legend.size() + 2;
++    size_t budget = height > reserved + 1 ? height - reserved : 1;
++    size_t hiddenActive = 0, hiddenRest = 0;
++
++    // Too tall: forget finished builds first, the oldest ones first. Those
++    // finished before whatever they sit beneath, so no row is orphaned.
++    if (shownBuilds + transfers.size() + others.size() > budget) {
++        budget--; // for the line that says how much is missing
++        std::vector<size_t> done;
++        for (size_t i = 0; i < builds.size(); i++) {
++            if (visible[i] && builds[i].status == BuildStatus::Done) {
++                done.push_back(i);
++            }
++        }
++        std::sort(done.begin(), done.end(), [&](size_t a, size_t b) {
++            return builds[a].stop < builds[b].stop;
++        });
++        for (auto i : done) {
++            if (shownBuilds + transfers.size() + others.size() <= budget) {
++                break;
++            }
++            visible[i] = false;
++            shownBuilds--;
++            hiddenRest++;
++        }
++    }
++
++    std::vector<std::vector<size_t>> children(builds.size());
++    std::vector<size_t> roots;
++    for (size_t i = 0; i < builds.size(); i++) {
++        if (!visible[i]) {
++            continue;
++        }
++        if (builds[i].parent && visible[*builds[i].parent]) {
++            children[*builds[i].parent].push_back(i);
++        } else {
++            roots.push_back(i);
++        }
++    }
++
++    std::vector<Row> rows;
++    std::function<void(size_t, const std::string &, bool, bool)> emit =
++        [&](size_t index, const std::string & indent, bool top, bool last) {
++            auto & b = builds[index];
++            Row row{.prefix = top ? "├─ " : indent + (last ? "╰─ " : "├─ "), .name = b.name};
++            switch (b.status) {
++            case BuildStatus::Running:
++                row.icon = icons.running;
++                row.color = C_RUNNING;
++                break;
++            case BuildStatus::Done:
++                row.icon = icons.done;
++                row.color = C_COMPLETED;
++                row.active = false;
++                break;
++            case BuildStatus::Failed:
++                row.icon = icons.failed;
++                row.color = C_FAILED;
++                row.active = false;
++                break;
++            }
++            auto secs =
++                wholeSeconds((b.status == BuildStatus::Running ? now : b.stop) - b.start);
++            if (secs >= wholeSeconds(SHOW_AFTER)) {
++                row.suffix = "  " + timer(icons.clock, secs);
++            }
++            if (b.status == BuildStatus::Running) {
++                if (b.estimate) {
++                    row.suffix +=
++                        " " + paint(C_TIMER, tag(icons.estimate, formatDuration(*b.estimate)));
++                }
++                if (b.cpuCores) {
++                    // Red for a build that sits idle, yellow for one that keeps a
++                    // single core busy and magenta for one that takes most of them.
++                    auto cores = *b.cpuCores;
++                    auto heavy = std::max(2.0, 0.75 * std::thread::hardware_concurrency());
++                    auto color = cores < 0.05 ? C_FAILED
++                        : cores < 1.5 ? C_RUNNING
++                        : cores >= heavy ? C_HOST
++                        : C_TIMER;
++                    row.suffix += " " + paint(color, tag(icons.cpu, fmt("%.1f", cores)));
++                }
++                if (!b.phase.empty()) {
++                    row.suffix += paint(C_MUTED, " (" + b.phase + ")");
++                }
++            }
++            if (!b.host.empty()) {
++                row.suffix += " " + paint(C_HOST, b.host);
++            }
++            rows.push_back(std::move(row));
++
++            auto & kids = children[index];
++            auto below = top ? "│  " : indent + (last ? "   " : "│  ");
++            for (size_t i = 0; i < kids.size(); i++) {
++                emit(kids[i], below, false, i + 1 == kids.size());
++            }
++        };
++    for (auto root : roots) {
++        emit(root, "", true, false);
++    }
++    std::move(transfers.begin(), transfers.end(), std::back_inserter(rows));
++    std::move(others.begin(), others.end(), std::back_inserter(rows));
++
++    if (rows.size() > budget) {
++        for (size_t i = budget; i < rows.size(); i++) {
++            (rows[i].active ? hiddenActive : hiddenRest)++;
++        }
++        rows.resize(budget);
++    }
++
++    // Transfer names share a column so that their bars line up.
++    size_t nameColumn = 0;
++    for (auto & row : rows) {
++        if (row.transfer) {
++            nameColumn = std::max(nameColumn, displayWidth(row.prefix) + 2 + row.name.size());
++        }
++    }
++    nameColumn = std::clamp(
++        nameColumn, MIN_NAME_WIDTH, std::max(MIN_NAME_WIDTH, std::min(width * 2 / 5, NAME_WIDTH))
++    );
++    size_t barWidth = width > nameColumn + 2 + STATUS_WIDTH
++        ? std::min(BAR_WIDTH, width - nameColumn - 2 - STATUS_WIDTH)
++        : 0;
++    if (barWidth < MIN_BAR_WIDTH) {
++        barWidth = 0;
++    }
++
++    std::vector<std::string> res;
++    res.push_back(paint(C_MUTED, "╭─ ") + "Builds");
++    for (auto & row : rows) {
++        auto line = paint(C_MUTED, row.prefix) + paint(row.color, row.icon) + GAP;
++        if (!row.transfer) {
++            line += row.name + row.suffix;
++        } else {
++            auto room = nameColumn - displayWidth(row.prefix) - 2;
++            auto name = truncateMiddle(row.name, room);
++            line += name + std::string(room - displayWidth(name), ' ');
++            if (barWidth > 0) {
++                line += "  ";
++                if (row.expected > 0) {
++                    line += progressBar(row.done, row.expected, barWidth, row.color);
++                } else {
++                    line += busyBar(row.age, barWidth, row.color);
++                    state.animated = true;
++                }
++            }
++            if (!row.suffix.empty()) {
++                line += "  " + row.suffix;
++            }
++        }
++        res.push_back(std::move(line));
++    }
++    if (hiddenActive + hiddenRest > 0) {
++        auto label = hiddenActive == 0 ? fmt("… %d more", hiddenRest)
++            : hiddenRest == 0 ? fmt("… %d active", hiddenActive)
++            : fmt("… %d active, %d more", hiddenActive, hiddenRest);
++        res.push_back(paint(C_MUTED, "├─ " + label));
++    }
++    std::move(legend.begin(), legend.end(), std::back_inserter(res));
++    return res;
++}
++
++std::string NomLogger::finalStatus(State & state, TimePoint now)
++{
++    // Pausing for a password prompt in the middle of the work is no end.
++    // Untyped activities do not count, a daemon connection is one of those.
++    bool working = std::any_of(state.activities.begin(), state.activities.end(), [](auto & a) {
++        return a.second.type != actUnknown;
++    });
++    if (!state.dirty || !state.sessionStart || working) {
++        return "";
++    }
++
++    auto duration = formatDuration(wholeSeconds(now - *state.sessionStart));
++    if (auto failed = tally(state, actBuilds).failed; failed > 0) {
++        return paint(C_FAILED, fmt("Exited with %d failed build(s) after %s", failed, duration));
++    }
++    return paint(C_COMPLETED, fmt("Finished after %s", duration));
++}
++
++void NomLogger::sampleCpu(State & state, TimePoint now)
++{
++    if (!options.cgroupRoot || now - state.cpuSampledAt < CPU_INTERVAL) {
++        return;
++    }
++    state.cpuSampledAt = now;
++
++    for (auto & [id, info] : state.activities) {
++        if (!info.build) {
++            continue;
++        }
++        auto & build = state.builds[*info.build];
++        // Builds on other machines are in cgroups that cannot be seen from here.
++        if (!build.host.empty() || build.drvHash.empty()) {
++            continue;
++        }
++
++        if (!build.cgroup) {
++            if (!state.cgroupParent && state.cgroupSearches >= CGROUP_SEARCHES) {
++                continue;
++            }
++            build.cgroup = findBuildCgroup(*options.cgroupRoot, state.cgroupParent, build.drvHash);
++            if (!build.cgroup) {
++                state.cgroupSearches += !state.cgroupParent;
++                continue;
++            }
++        }
++
++        auto usec = readCpuUsec(*build.cgroup);
++        if (usec && build.cpuUsec && *usec >= *build.cpuUsec && now > build.cpuSampledAt) {
++            build.cpuCores = (*usec - *build.cpuUsec)
++                / std::chrono::duration<double, std::micro>(now - build.cpuSampledAt).count();
++        }
++        if (usec) {
++            build.cpuUsec = usec;
++            build.cpuSampledAt = now;
++        }
++    }
++}
++
++void NomLogger::loadHistory(State & state)
++{
++    if (state.historyLoaded || !options.historyFile) {
++        return;
++    }
++    state.historyLoaded = true;
++
++    std::string content;
++    try {
++        content = readFile(*options.historyFile);
++    } catch (SysError &) {
++        return;
++    }
++
++    // One build per line: package, host and seconds, separated by tabs.
++    size_t lines = 0;
++    for (auto & line : tokenizeString<std::vector<std::string>>(content, "\n")) {
++        lines++;
++        auto first = line.find('\t'), last = line.rfind('\t');
++        if (first == std::string::npos || first == last) {
++            continue;
++        }
++        auto secs = string2Int<uint64_t>(std::string_view(line).substr(last + 1));
++        if (!secs) {
++            continue;
++        }
++        remember(
++            state.history[{line.substr(0, first), line.substr(first + 1, last - first - 1)}], *secs
++        );
++    }
++
++    std::string compact;
++    size_t kept = 0;
++    for (auto & [key, past] : state.history) {
++        for (auto secs : past) {
++            compact += historyLine(key.first, key.second, secs);
++            kept++;
++        }
++    }
++
++    // Durations are only ever appended. Now and then, drop the ones that
++    // have been superseded. A build that finishes elsewhere just now may
++    // be lost to this, which an estimate can live with.
++    if (lines > kept + HISTORY_SLACK) {
++        try {
++            auto tmp = fmt("%s.tmp.%d", *options.historyFile, getpid());
++            writeFile(tmp, compact, 0644);
++            renameFile(tmp, *options.historyFile);
++        } catch (SysError &) {
++        }
++    }
++}
++
++void NomLogger::saveHistory(State & state)
++{
++    if (!options.historyFile) {
++        return;
++    }
++
++    std::string lines;
++    for (auto & build : state.builds) {
++        // A failed build says nothing about how long a build takes, and one
++        // that was over at once was most likely only a cache hit of sorts.
++        auto secs = wholeSeconds(build.stop - build.start);
++        if (build.recorded || build.status != BuildStatus::Done || secs < 1
++            || build.package.empty() || build.host.find_first_of("\t\n") != std::string::npos)
++        {
++            continue;
++        }
++        build.recorded = true;
++        lines += historyLine(build.package, build.host, secs);
++        remember(state.history[{build.package, build.host}], secs);
++    }
++    if (lines.empty()) {
++        return;
++    }
++
++    // A single short write to a file opened for appending is not torn
++    // apart by other processes doing the same.
++    try {
++        createDirs(dirOf(*options.historyFile));
++        AutoCloseFD fd{
++            open(options.historyFile->c_str(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644)
++        };
++        if (!fd) {
++            return;
++        }
++        writeFull(fd.get(), lines);
++    } catch (SysError &) {
++    }
++}
++
++bool NomLogger::detectNerdFonts()
++{
++    if (auto forced = getEnv("NERD_FONTS")) {
++        auto value = toLower(*forced);
++        if (value == "1" || value == "true" || value == "yes") {
++            return true;
++        }
++        if (value == "0" || value == "false" || value == "no") {
++            return false;
++        }
++    }
++    auto program = toLower(getEnv("TERM_PROGRAM").value_or(""));
++    auto term = getEnv("TERM").value_or("");
++    return program == "ghostty" || program == "wezterm" || program == "kitty"
++        || term == "xterm-ghostty" || term == "xterm-kitty";
++}
++
++void NomLogger::writeToStdout(std::string_view s)
++{
++    auto state(state_.lock());
++    if (state->paused == 0) {
++        writeLogsToStderr(SYNC_BEGIN);
++        erase(*state);
++    }
++    Logger::writeToStdout(s);
++    restore(*state);
++}
++
++std::optional<std::string> NomLogger::ask(std::string_view msg)
++{
++    auto state(state_.lock());
++    if (state->paused > 0 || !isatty(STDIN_FILENO)) {
++        return {};
++    }
++    writeLogsToStderr(SYNC_BEGIN);
++    erase(*state);
++    writeLogsToStderr(SYNC_END);
++    std::cerr << msg;
++    auto s = trim(readLine(STDIN_FILENO));
++    draw(*state, true);
++    // only return the string if it's not empty
++    return s.size() != 0 ? s : std::optional<std::string>{};
++}
++
++void NomLogger::setPrintBuildLogs(bool printBuildLogs)
++{
++    this->printBuildLogs = printBuildLogs;
++}
++
++Logger * makeNomLogger()
++{
++    NomLogger::Options options{
++        .nerdIcons = NomLogger::detectNerdFonts(),
++        .historyFile = getStateDir() + "/nom-build-times-v1.tsv",
++    };
++#if __linux__
++    options.cgroupRoot = "/sys/fs/cgroup";
++#endif
++    return new NomLogger(shouldANSI(), std::move(options));
++}
++
++}
+diff --git a/lix/libmain/nom-logger.hh b/lix/libmain/nom-logger.hh
+new file mode 100644
+index 000000000..e8ecfebed
+--- /dev/null
++++ b/lix/libmain/nom-logger.hh
+@@ -0,0 +1,244 @@
++#pragma once
++///@file
++
++#include <chrono>
++#include <condition_variable>
++#include <filesystem>
++#include <map>
++#include <optional>
++#include <thread>
++#include <vector>
++
++#include "lix/libutil/logging.hh"
++#include "lix/libutil/sync.hh"
++
++namespace nix {
++
++/**
++ * A logger that draws a tree of running builds and transfers with a status
++ * table underneath, in the style of the `nom` output monitor.
++ *
++ * Unlike an external monitor this only sees the activities Lix reports, so
++ * it knows how many builds are planned but not which ones. The tree is hence
++ * built bottom-up: a finished build is shown beneath the build that consumes
++ * it once that one starts.
++ */
++struct NomLogger : public Logger
++{
++    using Clock = std::chrono::steady_clock;
++    using TimePoint = Clock::time_point;
++
++    struct Icons
++    {
++        const char * running, * done, * planned, * failed;
++        const char * download, * upload;
++        const char * clock, * estimate, * cpu, * summary;
++    };
++
++    struct Options
++    {
++        /** Draw glyphs that only fonts patched by Nerd Fonts have. */
++        bool nerdIcons = false;
++        /** Where build durations are kept between runs; none are kept if unset. */
++        std::optional<Path> historyFile;
++        /** The cgroup v2 filesystem to look for build cgroups in, if any. */
++        std::optional<std::filesystem::path> cgroupRoot;
++    };
++
++    enum class BuildStatus : uint8_t { Running, Done, Failed };
++
++    struct Build
++    {
++        std::string name, host, phase;
++        /** The name without its version, which durations are remembered by. */
++        std::string package;
++        /** The hash part of the derivation path, which names its cgroup. */
++        std::string drvHash;
++        BuildStatus status = BuildStatus::Running;
++        TimePoint start, stop;
++        /** Index of the build that has this one as an input, if it has started. */
++        std::optional<size_t> parent;
++
++        /** Median duration of earlier builds of this package, in seconds. */
++        std::optional<uint64_t> estimate;
++        /** Whether the duration of this build went into the history. */
++        bool recorded = false;
++
++        std::optional<std::filesystem::path> cgroup;
++        /** CPU time the cgroup had used when it was last looked at. */
++        std::optional<uint64_t> cpuUsec;
++        TimePoint cpuSampledAt;
++        /** Cores kept busy between the last two looks. */
++        std::optional<double> cpuCores;
++    };
++
++    enum class RowKind : uint8_t { None, Generic, Waiting, Download, Upload };
++
++    struct ActInfo
++    {
++        ActivityType type = actUnknown;
++        ActivityId parent = 0;
++        TimePoint start;
++        uint64_t done = 0, expected = 0, running = 0, failed = 0;
++        std::map<ActivityType, uint64_t> expectedByType;
++
++        RowKind row = RowKind::None;
++        /** Text of the row; a package name, URI or message. */
++        std::string name, host;
++        /** Bytes moved by this transfer, or by the copy it wraps. */
++        uint64_t xferDone = 0, xferExpected = 0;
++        /** Index into `State::builds` if this is a build. */
++        std::optional<size_t> build;
++    };
++
++    struct Totals
++    {
++        uint64_t done = 0, expected = 0, failed = 0;
++    };
++
++    struct Counts
++    {
++        uint64_t done = 0, expected = 0, running = 0, failed = 0;
++    };
++
++    struct State
++    {
++        /** Ordered by id, which is also the order they started in. */
++        std::map<ActivityId, ActInfo> activities;
++        /** What already stopped activities contributed, by type. */
++        std::map<ActivityType, Totals> totals;
++
++        /** Every build seen so far, in the order they started. */
++        std::vector<Build> builds;
++        std::map<std::string, size_t> buildsByDrv;
++        /** How many reported build failures were pinned on a build. */
++        uint64_t failuresAssigned = 0;
++
++        bool sawDownload = false, sawUpload = false;
++
++        /** The last few durations per package and host, oldest first. */
++        std::map<std::pair<std::string, std::string>, std::vector<uint64_t>> history;
++        bool historyLoaded = false;
++
++        /** The cgroup that holds the build cgroups, once one was found. */
++        std::optional<std::filesystem::path> cgroupParent;
++        /** How often the whole cgroup tree was searched in vain. */
++        unsigned cgroupSearches = 0;
++        TimePoint cpuSampledAt;
++
++        /** Set while there is work the final status line should report. */
++        bool dirty = false;
++        std::optional<TimePoint> sessionStart;
++
++        /** The frame as it was last drawn, and how many lines of it are on screen. */
++        std::string lastFrame;
++        int lastFrameLines = 0;
++        int lastLines = 0;
++        /** Whether the frame has something that moves faster than a timer. */
++        bool animated = false;
++
++        uint32_t paused = 1;
++        bool haveUpdate = false;
++    };
++
++    Sync<State> state_;
++
++    std::thread updateThread;
++
++    std::condition_variable quitCV, updateCV;
++
++    bool printBuildLogs = false;
++    bool isTTY;
++    Options options;
++    const Icons & icons;
++
++    NomLogger(bool isTTY);
++
++    NomLogger(bool isTTY, Options options);
++
++    ~NomLogger();
++
++    void pause() override;
++
++    void resetProgress() override;
++
++    void resume() override;
++
++    bool isVerbose() override;
++
++    BufferState log(Verbosity lvl, std::string_view s) override;
++
++    BufferState logEI(const ErrorInfo & ei) override;
++
++    BufferState startActivityImpl(
++        ActivityId act,
++        Verbosity lvl,
++        ActivityType type,
++        const std::string & s,
++        const Fields & fields,
++        ActivityId parent
++    ) override;
++
++    BufferState stopActivityImpl(ActivityId act) override;
++
++    BufferState
++    resultImpl(ActivityId act, ResultType type, const std::vector<Field> & fields) override;
++
++    void writeToStdout(std::string_view s) override;
++
++    std::optional<std::string> ask(std::string_view msg) override;
++
++    void setPrintBuildLogs(bool printBuildLogs) override;
++
++    /** Sums up the live and finished activities of one type. */
++    Counts tally(State & state, ActivityType type);
++
++    /** The status table that closes the frame. */
++    std::vector<std::string> renderLegend(State & state, TimePoint now, size_t width);
++
++    /**
++     * The whole frame, one string per terminal line, at most `height - 1`
++     * lines tall. Empty when there is nothing to show.
++     */
++    std::vector<std::string>
++    renderFrame(State & state, TimePoint now, size_t width, size_t height);
++
++    /** The line printed when the logger is paused after doing some work. */
++    std::string finalStatus(State & state, TimePoint now);
++
++    /**
++     * Measures how many cores each running local build keeps busy, from the
++     * cgroup Lix runs it in. Does nothing more often than once a second.
++     */
++    void sampleCpu(State & state, TimePoint now);
++
++    /** Appends the durations of the builds that succeeded to the history. */
++    void saveHistory(State & state);
++
++    /**
++     * Whether to expect a Nerd Font: what `NERD_FONTS` says, and failing
++     * that whether this is a terminal that falls back to one by itself.
++     */
++    static bool detectNerdFonts();
++
++private:
++    BufferState log(State & state, std::string_view s);
++
++    bool hasAncestor(State & state, ActivityType type, ActivityId act);
++
++    void loadHistory(State & state);
++
++    void update(State & state);
++
++    void erase(State & state);
++
++    /** Puts the erased frame back as it was, without working it out again. */
++    void restore(State & state);
++
++    /** Redraws the frame; unless `force` is set, only if it changed. */
++    void draw(State & state, bool force);
++};
++
++Logger * makeNomLogger();
++
++}
+diff --git a/lix/libutil/log-format.hh b/lix/libutil/log-format.hh
+index a35f951dd..d6406cb0c 100644
+--- a/lix/libutil/log-format.hh
++++ b/lix/libutil/log-format.hh
+@@ -29,6 +29,8 @@ struct LogFormat
+         BarWithLogs,
+         Multiline,
+         MultilineWithLogs,
++        Nom,
++        NomWithLogs,
+     };
+ 
+     using enum LogFormatValue;
+@@ -66,6 +68,10 @@ public:
+             return Multiline;
+         } else if (str == "multiline-with-logs") {
+             return MultilineWithLogs;
++        } else if (str == "nom") {
++            return Nom;
++        } else if (str == "nom-with-logs") {
++            return NomWithLogs;
+         }
+ 
+         return std::nullopt;
+@@ -90,6 +96,10 @@ public:
+             return "multiline";
+         case MultilineWithLogs:
+             return "multiline-with-logs";
++        case Nom:
++            return "nom";
++        case NomWithLogs:
++            return "nom-with-logs";
+         }
+     }
+ 
+@@ -109,6 +119,8 @@ public:
+             [[fallthrough]];
+         case Multiline:
+             [[fallthrough]];
++        case Nom:
++            [[fallthrough]];
+         case InternalJson:
+             return *this;
+ 
+@@ -118,6 +130,8 @@ public:
+             return Bar;
+         case MultilineWithLogs:
+             return Multiline;
++        case NomWithLogs:
++            return Nom;
+         }
+     }
+ 
+@@ -132,6 +146,8 @@ public:
+             [[fallthrough]];
+         case MultilineWithLogs:
+             [[fallthrough]];
++        case NomWithLogs:
++            [[fallthrough]];
+         case InternalJson:
+             return *this;
+ 
+@@ -141,6 +157,8 @@ public:
+             return BarWithLogs;
+         case Multiline:
+             return MultilineWithLogs;
++        case Nom:
++            return NomWithLogs;
+         }
+     }
+ };
+diff --git a/lix/libutil/logging-settings/log-format.md b/lix/libutil/logging-settings/log-format.md
+index b0e1b614f..d89b1ccd1 100644
+--- a/lix/libutil/logging-settings/log-format.md
++++ b/lix/libutil/logging-settings/log-format.md
+@@ -5,7 +5,7 @@ settingType: LogFormatSetting
+ defaultExpr: 'LogFormat::Auto'
+ defaultText: auto
+ ---
+-Set the format of log output; one of `raw`, `internal-json`, `bar`, `bar-with-logs`, `multiline` or `multiline-with-logs`.
++Set the format of log output; one of `raw`, `internal-json`, `bar`, `bar-with-logs`, `multiline`, `multiline-with-logs`, `nom` or `nom-with-logs`.
+ 
+ For legacy reasons, the default value "auto" makes the actual log format depend on which command you're using.
+ The legacy `nix-` CLI will use `raw-with-logs` (or `raw` with `-Q`/`--no-build-output`), and `nix3` commands will use `bar-with-logs`.
+diff --git a/tests/unit/libmain/nom-logger.cc b/tests/unit/libmain/nom-logger.cc
+new file mode 100644
+index 000000000..7dc49ee34
+--- /dev/null
++++ b/tests/unit/libmain/nom-logger.cc
+@@ -0,0 +1,213 @@
++#include <gtest/gtest.h>
++
++#include "lix/libmain/nom-logger.hh"
++#include "lix/libstore/temporary-dir.hh"
++#include "lix/libutil/file-system.hh"
++#include "lix/libutil/strings.hh"
++#include "lix/libutil/terminal.hh"
++
++using namespace std::literals::chrono_literals;
++
++namespace nix {
++
++/** The frame as plain text: no colours, ordinary spaces, no padding at line ends. */
++static std::vector<std::string> plain(const std::vector<std::string> & lines)
++{
++    std::vector<std::string> res;
++    for (auto & line : lines) {
++        auto s = replaceStrings(filterANSIEscapes(line, true), " ", " ");
++        s.erase(s.find_last_not_of(' ') + 1);
++        res.push_back(s);
++    }
++    return res;
++}
++
++TEST(NomLogger, quietWhenIdle)
++{
++    NomLogger logger(false);
++    auto act = logger.startActivity(lvlDebug, actUnknown, "");
++
++    auto state = logger.state_.lock();
++    ASSERT_TRUE(logger.renderFrame(*state, NomLogger::Clock::now() + 5s, 80, 40).empty());
++}
++
++TEST(NomLogger, finishedBuildHangsBelowItsConsumer)
++{
++    auto dir = createTempDir();
++    AutoDelete cleanup(dir);
++    auto dep = dir + "/aaaa-dep-1.0.drv";
++    auto hello = dir + "/bbbb-hello-2.12.drv";
++    writeFile(dep, "Derive([],[],[],\"\",\"\",[],[])");
++    writeFile(hello, "Derive([],[(\"" + dep + "\",[\"out\"])],[],\"\",\"\",[],[])");
++
++    NomLogger logger(false);
++    auto builds = logger.startActivity(lvlDebug, actBuilds, "");
++    {
++        auto act = logger.startActivity(lvlDebug, actBuild, "", Logger::Fields{dep, "", 1, 1});
++    }
++    auto act = logger.startActivity(lvlDebug, actBuild, "", Logger::Fields{hello, "builder", 1, 1});
++    (void) act.result(resSetPhase, "buildPhase");
++    (void) builds.progress(1, 3, 1, 0);
++
++    auto state = logger.state_.lock();
++    auto frame = plain(logger.renderFrame(*state, NomLogger::Clock::now() + 65s, 80, 40));
++
++    ASSERT_EQ(
++        frame,
++        (std::vector<std::string>{
++            "╭─ Builds",
++            "├─ ⏵ hello-2.12  ⏱ 1m5s (buildPhase) builder",
++            "│  ╰─ ✔ dep-1.0",
++            "┢━ Status   Running   Completed   Waiting   Total",
++            "┃  Builds   ⏵ 1       ✔ 1         ⏸ 1       ∑ 3",
++            "┗━ Elapsed ⏱ 1m5s",
++        })
++    );
++}
++
++TEST(NomLogger, failureIsPinnedOnTheBuildThatStopped)
++{
++    NomLogger logger(false);
++    {
++        auto builds = logger.startActivity(lvlDebug, actBuilds, "");
++        {
++            auto act = logger.startActivity(
++                lvlDebug, actBuild, "", Logger::Fields{"/nix/store/aaaa-broken-1.0.drv", "", 1, 1}
++            );
++        }
++        (void) builds.progress(0, 0, 0, 1);
++    }
++
++    auto state = logger.state_.lock();
++    // Long after it stopped, where a build that succeeded would be gone.
++    auto now = NomLogger::Clock::now() + 65s;
++
++    ASSERT_EQ(
++        plain(logger.renderFrame(*state, now, 80, 40)),
++        (std::vector<std::string>{
++            "╭─ Builds",
++            "├─ ✗ broken-1.0",
++            "┢━ Status   Running   Completed   Waiting   Failed   Total",
++            "┃  Builds   ⏵ 0       ✔ 0         ⏸ 0       ✗ 1      ∑ 1",
++            "┗━ Elapsed ⏱ 1m5s",
++        })
++    );
++    ASSERT_EQ(
++        filterANSIEscapes(logger.finalStatus(*state, now), true),
++        "Exited with 1 failed build(s) after 1m5s"
++    );
++}
++
++TEST(NomLogger, transferShowsProgress)
++{
++    NomLogger logger(false);
++    auto act = logger.startActivity(
++        lvlDebug,
++        actFileTransfer,
++        "downloading 'https://example.org/src.tar.gz'",
++        {"https://example.org/src.tar.gz"}
++    );
++    (void) act.progress(512 * 1024, 2 * 1024 * 1024);
++
++    auto state = logger.state_.lock();
++    auto frame = plain(logger.renderFrame(*state, NomLogger::Clock::now() + 5s, 100, 40));
++
++    ASSERT_EQ(
++        frame,
++        (std::vector<std::string>{
++            "╭─ Builds",
++            "├─ ↓ https://example.org/src.tar.gz  ━━━━━━━─────────────────────   25%  512 KiB/2.0 MiB",
++            "┕━ Elapsed ⏱ 5s",
++        })
++    );
++}
++
++TEST(NomLogger, nerdIcons)
++{
++    NomLogger logger(false, {.nerdIcons = true});
++    auto act = logger.startActivity(
++        lvlDebug, actBuild, "", Logger::Fields{"/nix/store/aaaa-hello-2.12.drv", "", 1, 1}
++    );
++
++    auto state = logger.state_.lock();
++    auto frame = plain(logger.renderFrame(*state, NomLogger::Clock::now() + 5s, 80, 40));
++
++    ASSERT_EQ(frame[1], "├─ \uf04b hello-2.12  \uf017 5s");
++}
++
++TEST(NomLogger, estimatesFromEarlierBuilds)
++{
++    auto dir = createTempDir();
++    AutoDelete cleanup(dir);
++    auto history = dir + "/state/history.tsv";
++    createDirs(dir + "/state");
++    // Remembered by package, so that a new version still has an estimate.
++    writeFile(history, "hello\t\t30\nhello\t\t10\nhello\tbuilder\t500\nother\t\t7\nhello\t\t20\n");
++
++    NomLogger logger(false, {.historyFile = history});
++    {
++        auto dep = logger.startActivity(
++            lvlDebug, actBuild, "", Logger::Fields{"/nix/store/aaaa-dep-1.0.drv", "", 1, 1}
++        );
++    }
++    auto act = logger.startActivity(
++        lvlDebug, actBuild, "", Logger::Fields{"/nix/store/bbbb-hello-2.13.drv", "", 1, 1}
++    );
++
++    auto state = logger.state_.lock();
++    auto frame = plain(logger.renderFrame(*state, NomLogger::Clock::now() + 5s, 80, 40));
++    ASSERT_EQ(frame[1], "├─ ⏵ hello-2.13  ⏱ 5s ∅ 20s");
++
++    // Pretend that the finished build took a while, it is not kept otherwise.
++    state->builds[0].start -= 42s;
++    logger.saveHistory(*state);
++    logger.saveHistory(*state);
++    ASSERT_TRUE(readFile(history).ends_with("hello\t\t20\ndep\t\t42\n"));
++}
++
++TEST(NomLogger, cpuFromTheBuildCgroup)
++{
++    auto dir = createTempDir();
++    AutoDelete cleanup(dir);
++    auto cgroup = dir + "/system.slice/nix-daemon.service/nix-build@aaaa-30001";
++    createDirs(cgroup);
++    createDirs(dir + "/user.slice/nix-build@zzzz-30002");
++    writeFile(cgroup + "/cpu.stat", "usage_usec 1000000\nuser_usec 900000\nsystem_usec 100000\n");
++
++    NomLogger logger(false, {.cgroupRoot = dir});
++    auto act = logger.startActivity(
++        lvlDebug, actBuild, "", Logger::Fields{"/nix/store/aaaa-hello-2.12.drv", "", 1, 1}
++    );
++
++    auto state = logger.state_.lock();
++    auto now = NomLogger::Clock::now();
++    logger.sampleCpu(*state, now + 1s);
++    writeFile(cgroup + "/cpu.stat", "usage_usec 7000000\nuser_usec 6900000\nsystem_usec 100000\n");
++    logger.sampleCpu(*state, now + 5s);
++
++    ASSERT_EQ(state->builds[0].cgroup, std::filesystem::path(cgroup));
++    auto frame = plain(logger.renderFrame(*state, now + 5s, 80, 40));
++    ASSERT_EQ(frame[1], "├─ ⏵ hello-2.12  ⏱ 5s ⚙ 1.5");
++}
++
++TEST(NomLogger, tallFrameIsCutToTheTerminal)
++{
++    NomLogger logger(false);
++    std::vector<Activity> acts;
++    for (int i = 0; i < 20; i++) {
++        acts.push_back(logger.startActivity(
++            lvlDebug, actBuild, "", Logger::Fields{fmt("/nix/store/aaaa-pkg-%d.drv", i), "", 1, 1}
++        ));
++    }
++
++    auto state = logger.state_.lock();
++    auto frame = plain(logger.renderFrame(*state, NomLogger::Clock::now() + 5s, 80, 10));
++
++    // One line stays free for the cursor.
++    ASSERT_EQ(frame.size(), 9u);
++    ASSERT_EQ(frame[6], "├─ ⏵ pkg-5  ⏱ 5s");
++    ASSERT_EQ(frame[7], "├─ … 14 active");
++    ASSERT_EQ(frame[8], "┕━ Elapsed ⏱ 5s");
++}
++
++}
+diff --git a/tests/unit/meson.build b/tests/unit/meson.build
+index 1dbcb41c4..4076bc3ac 100644
+--- a/tests/unit/meson.build
++++ b/tests/unit/meson.build
+@@ -277,6 +277,7 @@ test(
+ libmain_tests_sources = files(
+   'libmain/crash.cc',
+   'libmain/progress-bar.cc',
++  'libmain/nom-logger.cc',
+ )
+ 
+ libmain_tester = executable(
+-- 
+2.56.0
+
