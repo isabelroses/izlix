@@ -1,7 +1,8 @@
-From ad0313d3b1e7b26608ff206dd9564f0af4e55056 Mon Sep 17 00:00:00 2001
+From c0146da1dd48eb5102aa989a994759736702fc80 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 10 May 2026 23:24:26 +0100
-Subject: [PATCH 1/2] libexpr: backport new stats
+Subject: [PATCH] libexpr: backport new stats
+
 ---
  lix/libexpr/eval-inline.hh |  1 +
  lix/libexpr/eval.cc        | 50 +++++++++++++++++++++++++++++---------
@@ -23,7 +24,7 @@ index cfdb6427e..ec937dd3a 100644
  }
  
 diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
-index e9d24f941..532f8d130 100644
+index 824515444..b60e2ca96 100644
 --- a/lix/libexpr/eval.cc
 +++ b/lix/libexpr/eval.cc
 @@ -163,6 +163,13 @@ static void * oomHandler(size_t requested)
@@ -58,7 +59,7 @@ index e9d24f941..532f8d130 100644
      /* Set the initial heap size to something fairly big (25% of
         physical RAM, up to a maximum of 384 MiB) so that in most cases
         we don't need to garbage collect at all.  (Collection has a
-@@ -1967,15 +1978,22 @@ void Evaluator::printStatistics()
+@@ -1978,15 +1989,22 @@ void Evaluator::printStatistics()
      struct rusage buf;
      getrusage(RUSAGE_SELF, &buf);
      float cpuTime = buf.ru_utime.tv_sec + ((float) buf.ru_utime.tv_usec / 1000000);
@@ -85,7 +86,7 @@ index e9d24f941..532f8d130 100644
  #endif
  
      auto outPath = getEnv("NIX_SHOW_STATS_PATH").value_or("-");
-@@ -1984,29 +2002,36 @@ void Evaluator::printStatistics()
+@@ -1995,29 +2013,36 @@ void Evaluator::printStatistics()
          fs.open(outPath, std::fstream::out);
      JSON topObj = JSON::object();
      topObj["cpuTime"] = cpuTime;
@@ -130,7 +131,7 @@ index e9d24f941..532f8d130 100644
      };
      topObj["sizes"] = {
          {"Env", sizeof(Env)},
-@@ -2025,6 +2050,7 @@ void Evaluator::printStatistics()
+@@ -2036,6 +2061,7 @@ void Evaluator::printStatistics()
      topObj["gc"] = {
          {"heapSize", heapSize},
          {"totalBytes", totalBytes},
@@ -139,7 +140,7 @@ index e9d24f941..532f8d130 100644
  #endif
  
 diff --git a/lix/libexpr/eval.hh b/lix/libexpr/eval.hh
-index 934e272be..3e52cf637 100644
+index 6cd14c910..bb89ea8b8 100644
 --- a/lix/libexpr/eval.hh
 +++ b/lix/libexpr/eval.hh
 @@ -181,6 +181,7 @@ public:
@@ -151,7 +152,7 @@ index 934e272be..3e52cf637 100644
          unsigned long nrAttrsInAttrsets = 0;
          unsigned long nrListElems = 0;
 diff --git a/lix/libexpr/nixexpr.cc b/lix/libexpr/nixexpr.cc
-index c31e68141..8ac361e28 100644
+index 7212bcf6f..4799bb4d7 100644
 --- a/lix/libexpr/nixexpr.cc
 +++ b/lix/libexpr/nixexpr.cc
 @@ -9,6 +9,8 @@
@@ -205,5 +206,5 @@ index a2f5bfbf3..49da50df4 100644
      Expr & operator=(const Expr &) = delete;
      virtual ~Expr() { };
 -- 
-2.51.2
+2.56.0
 

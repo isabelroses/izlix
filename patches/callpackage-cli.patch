@@ -1,4 +1,4 @@
-From 338dc61779c28540bd20264f1350d323d49bd253 Mon Sep 17 00:00:00 2001
+From 6866cf9afccf45f73a47b02345fe21db5db26563 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Tue, 24 Mar 2026 11:00:32 +0000
 Subject: [PATCH] feat(cli): add callPackage flag
@@ -11,7 +11,7 @@ based on the work of https://github.com/privatevoid-net/nix-super
  2 files changed, 26 insertions(+), 4 deletions(-)
 
 diff --git a/lix/libcmd/command.hh b/lix/libcmd/command.hh
-index 85c2269aa..5c774bc0a 100644
+index 306a89917..b92a18b9d 100644
 --- a/lix/libcmd/command.hh
 +++ b/lix/libcmd/command.hh
 @@ -112,6 +112,7 @@ struct SourceExprCommand : virtual Args, MixFlakeOptions
@@ -23,7 +23,7 @@ index 85c2269aa..5c774bc0a 100644
      SourceExprCommand();
  
 diff --git a/lix/libcmd/installables.cc b/lix/libcmd/installables.cc
-index da0e53d72..29d93fa5e 100644
+index 182e428bd..a91b9b0ec 100644
 --- a/lix/libcmd/installables.cc
 +++ b/lix/libcmd/installables.cc
 @@ -166,6 +166,19 @@ SourceExprCommand::SourceExprCommand()
@@ -84,5 +84,5 @@ index da0e53d72..29d93fa5e 100644
                  auto & e = evaluator->parseExprFromString(*expr, CanonPath::fromCwd());
                  return state.eval(e);
 -- 
-2.51.2
+2.56.0
 

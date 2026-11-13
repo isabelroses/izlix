@@ -1,7 +1,8 @@
-From da7660c0fb1901393c6ecafd22fbe9431f68f03f Mon Sep 17 00:00:00 2001
+From a4f020aff1ef95008546192e56321fb695b30d00 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 12 Apr 2026 12:03:43 +0100
 Subject: [PATCH] feat(builtins): greaterThan
+
 ---
  lix/libexpr/builtins/greaterThan.md |  7 +++++++
  lix/libexpr/meson.build             |  1 +
@@ -23,10 +24,10 @@ index 000000000..3bb2787c7
 +`false` otherwise. Evaluation aborts if either *e1* or *e2* does not
 +evaluate to a number.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index fff97b8f7..4f6d46c8a 100644
+index 1568b8020..f4a5d8b1e 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -97,6 +97,7 @@ builtin_definitions = files(
+@@ -85,6 +85,7 @@ builtin_definitions = files(
    'builtins/getContext.md',
    'builtins/getEnv.md',
    'builtins/getFlake.md',
@@ -35,10 +36,10 @@ index fff97b8f7..4f6d46c8a 100644
    'builtins/hasAttr.md',
    'builtins/hasContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 1237ad7ae..a95344bd6 100644
+index b6dc60ce3..1478fa587 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2464,6 +2464,8 @@ static Value prim_genList(EvalState & state, Value ** args)
+@@ -2490,6 +2490,8 @@ static Value prim_genList(EvalState & state, Value ** args)
  
  static Value prim_lessThan(EvalState & state, Value ** args);
  
@@ -47,7 +48,7 @@ index 1237ad7ae..a95344bd6 100644
  static Value prim_sort(EvalState & state, Value ** args)
  {
      state.forceList(*args[1], noPos, "while evaluating the second argument passed to builtins.sort");
-@@ -2488,8 +2490,13 @@ static Value prim_sort(EvalState & state, Value ** args)
+@@ -2514,8 +2516,13 @@ static Value prim_sort(EvalState & state, Value ** args)
             should be outside the lambda creation */
          if (args[0]->isPrimOp()) {
              auto ptr = args[0]->primOp()->fun.target<decltype(&prim_lessThan)>();
@@ -63,8 +64,8 @@ index 1237ad7ae..a95344bd6 100644
          }
  
          Value vs[] = {a, b};
-@@ -2741,6 +2748,15 @@ static Value prim_lessThan(EvalState & state, Value ** args)
-     return {NewValueAs::boolean, comp(*args[0], *args[1])};
+@@ -2631,6 +2638,15 @@ static Value prim_concatMap(EvalState & state, Value ** args)
+     return {NewValueAs::list, result};
  }
  
 +static Value prim_greaterThan(EvalState & state, Value ** args)
@@ -78,7 +79,7 @@ index 1237ad7ae..a95344bd6 100644
 +
  
  /*************************************************************
-  * String manipulation
+  * Integer arithmetic
 -- 
-2.53.0
+2.56.0
 

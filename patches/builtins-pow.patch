@@ -1,7 +1,8 @@
-From c1a4f91d39063a8311e7278abec0ab1f4b9f5c86 Mon Sep 17 00:00:00 2001
+From f63a5faee05f93ad0fbcf82f4a1a5bdb4b892de8 Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 12 Apr 2026 12:30:47 +0100
 Subject: [PATCH] feat(builtins): pow
+
 ---
  lix/libexpr/builtins/pow.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -21,10 +22,10 @@ index 000000000..4a21084b9
 +---
 +Return the result of *e1* to the power of *e2*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index fff97b8f7..3464d27f3 100644
+index f4a5d8b1e..a490ea574 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -127,6 +127,7 @@ builtin_definitions = files(
+@@ -116,6 +116,7 @@ builtin_definitions = files(
    'builtins/path.md',
    'builtins/pathExists.md',
    'builtins/placeholder.md',
@@ -33,10 +34,10 @@ index fff97b8f7..3464d27f3 100644
    'builtins/readFile.md',
    'builtins/readFileType.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 1237ad7ae..b5ff1168a 100644
+index 1478fa587..830d9b25e 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2710,6 +2710,18 @@ static Value prim_div(EvalState & state, Value ** args)
+@@ -2752,6 +2752,18 @@ static Value prim_div(EvalState & state, Value ** args)
      }
  }
  
@@ -56,5 +57,5 @@ index 1237ad7ae..b5ff1168a 100644
  {
      auto i1 = state.forceInt(*args[0], noPos, "while evaluating the first argument passed to builtins.bitAnd");
 -- 
-2.51.2
+2.56.0
 

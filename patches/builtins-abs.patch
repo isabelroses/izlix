@@ -1,7 +1,8 @@
-From b1ab4290701525fcdab2a07c09f13d070ddd1c0e Mon Sep 17 00:00:00 2001
+From 4bce5473aeb042f5528d4d860aa95ad60c12e67b Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 12 Apr 2026 12:26:58 +0100
 Subject: [PATCH] feat(builtins): abs
+
 ---
  lix/libexpr/builtins/abs.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -21,10 +22,10 @@ index 000000000..6c8ab27a2
 +---
 +Return the absolute value of the number *e*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index fff97b8f7..3f53d676a 100644
+index a85b47e32..1568b8020 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -52,6 +52,7 @@ liblix_generated_headers += custom_target(
+@@ -39,6 +39,7 @@ liblix_generated_headers += custom_target(
  builtin_definitions = files(
    # keep-sorted start
    'builtins/abort.md',
@@ -33,10 +34,10 @@ index fff97b8f7..3f53d676a 100644
    'builtins/addDrvOutputDependencies.md',
    'builtins/addErrorContext.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 1237ad7ae..785a89071 100644
+index c61cca46f..b6dc60ce3 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2741,6 +2741,25 @@ static Value prim_lessThan(EvalState & state, Value ** args)
+@@ -2767,6 +2767,25 @@ static Value prim_lessThan(EvalState & state, Value ** args)
      return {NewValueAs::boolean, comp(*args[0], *args[1])};
  }
  
@@ -63,5 +64,5 @@ index 1237ad7ae..785a89071 100644
  /*************************************************************
   * String manipulation
 -- 
-2.51.2
+2.56.0
 

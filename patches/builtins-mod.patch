@@ -1,7 +1,8 @@
-From e8259d59a94778a564285ac8f354b6902836f71e Mon Sep 17 00:00:00 2001
+From 060565c4a1bbade8afcab92a5a1224ee7d04316c Mon Sep 17 00:00:00 2001
 From: isabel <isabel@isabelroses.com>
 Date: Sun, 12 Apr 2026 12:29:15 +0100
 Subject: [PATCH] feat(builtins): mod
+
 ---
  lix/libexpr/builtins/mod.md |  5 +++++
  lix/libexpr/meson.build     |  1 +
@@ -21,10 +22,10 @@ index 000000000..7833f9e32
 +---
 +Returns the result is the remainder of *e1* divided by *e2*.
 diff --git a/lix/libexpr/meson.build b/lix/libexpr/meson.build
-index fff97b8f7..9b3c1ceda 100644
+index a490ea574..f9d7e9639 100644
 --- a/lix/libexpr/meson.build
 +++ b/lix/libexpr/meson.build
-@@ -120,6 +120,7 @@ builtin_definitions = files(
+@@ -109,6 +109,7 @@ builtin_definitions = files(
    'builtins/map.md',
    'builtins/mapAttrs.md',
    'builtins/match.md',
@@ -33,11 +34,11 @@ index fff97b8f7..9b3c1ceda 100644
    'builtins/parseDrvName.md',
    'builtins/parseFlakeRef.md',
 diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
-index 1237ad7ae..74bcd337a 100644
+index 830d9b25e..292f41bfc 100644
 --- a/lix/libexpr/primops.cc
 +++ b/lix/libexpr/primops.cc
-@@ -2710,6 +2710,21 @@ static Value prim_div(EvalState & state, Value ** args)
-     }
+@@ -2764,6 +2764,21 @@ static Value prim_pow(EvalState & state, Value ** args)
+     return {NewValueAs::floating, std::pow(f1, f2)};
  }
  
 +static Value prim_mod(EvalState & state, Value ** args)
@@ -59,5 +60,5 @@ index 1237ad7ae..74bcd337a 100644
  {
      auto i1 = state.forceInt(*args[0], noPos, "while evaluating the first argument passed to builtins.bitAnd");
 -- 
-2.51.2
+2.56.0
 

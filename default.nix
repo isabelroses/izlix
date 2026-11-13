@@ -45,6 +45,9 @@ let
         # don't alter the names of derivations for nix store diff-closure
         ./patches/closure-names.patch
 
+        # adds a nom like logger right into lix
+        ./patches/nom-logger.patch
+
         # add more builtins to lix, this consists of the following:
         # - `builtins.abs` which will get you a absolute value of a number
         ./patches/builtins-abs.patch
@@ -64,13 +67,6 @@ let
 
         # don't allocate values in a lamda when _: is the argument
         ./patches/lixexpr-don-t-allocate-on-_.patch
-
-        # libfetchers/cache: retry inserting entries into the fetcher cache
-        # https://gerrit.lix.systems/c/lix/+/5081
-        # (pkgs.fetchpatch2 {
-        #   url = "https://gerrit.lix.systems/changes/lix~5081/revisions/1/patch?download&raw";
-        #   hash = "sha256-g0iJDU9WxJAOymduMJSwrzAxtS8p12ftjcgwJ+Oh9/M=";
-        # })
       ];
     };
   };
