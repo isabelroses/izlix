@@ -58,6 +58,15 @@ let
         # don't allocate values in a lamda when _: is the argument
         ./patches/lixexpr-don-t-allocate-on-_.patch
 
+        # eval speedups
+        # - only work out which formals went unused when reporting an error
+        ./patches/libexpr-unused-formals-on-error-path.patch
+        # - don't zero io buffers we are about to read into
+        ./patches/libutil-dont-zero-io-buffers.patch
+
+        # build speedup, keeps the zngur bridge header out of most translation units
+        ./patches/libutil-error-hh-drop-lix-rs-include.patch
+
         # build failure on master
         (pkgs.fetchpatch2 {
           url = "https://raw.githubusercontent.com/NixOS/nixpkgs/refs/heads/master/pkgs/tools/package-management/lix/lix-rs-tests-whole-archive.patch";

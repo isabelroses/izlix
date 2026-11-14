@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sat, 14 Nov 2026 11:26:37 +0000
+Subject: [PATCH] libutil: don't zero io buffers that are about to be
+ overwritten
+
+dumpContents allocated and zeroed a 64k buffer for every file no matter
+how small, so size it to the file. drainInto zero-initialised buffers that
+are only ever read into.
+---
+ lix/libutil/archive.cc  | 2 +-
+ lix/libutil/async-io.cc | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/lix/libutil/archive.cc b/lix/libutil/archive.cc
+index 927d8450d..308668244 100644
+--- a/lix/libutil/archive.cc
++++ b/lix/libutil/archive.cc
+@@ -43,7 +43,7 @@ static WireFormatGenerator dumpContents(Path path, off_t size)
+     AutoCloseFD fd{sys::open(path, O_RDONLY | O_CLOEXEC)};
+     if (!fd) throw SysError("opening file '%1%'", path);
+ 
+-    std::vector<char> buf(65536);
++    std::vector<char> buf(std::min<size_t>(size, 65536));
+     size_t left = size;
+ 
+     while (left > 0) {
+diff --git a/lix/libutil/async-io.cc b/lix/libutil/async-io.cc
+index 5f888f4c1..7f9beb5a8 100644
+--- a/lix/libutil/async-io.cc
++++ b/lix/libutil/async-io.cc
+@@ -15,7 +15,7 @@ namespace nix {
+ kj::Promise<Result<void>> AsyncInputStream::drainInto(Sink & sink)
+ try {
+     constexpr size_t BUF_SIZE = 65536;
+-    auto buf = std::make_unique<char[]>(BUF_SIZE);
++    auto buf = std::make_unique_for_overwrite<char[]>(BUF_SIZE);
+     while (auto r = TRY_AWAIT(read(buf.get(), BUF_SIZE))) {
+         sink(std::string_view(buf.get(), *r));
+     }
+@@ -27,7 +27,7 @@ try {
+ kj::Promise<Result<void>> AsyncInputStream::drainInto(AsyncOutputStream & stream)
+ try {
+     constexpr size_t BUF_SIZE = 65536;
+-    auto buf = std::make_unique<char[]>(BUF_SIZE);
++    auto buf = std::make_unique_for_overwrite<char[]>(BUF_SIZE);
+     while (auto r = TRY_AWAIT(read(buf.get(), BUF_SIZE))) {
+         TRY_AWAIT(stream.writeFull(buf.get(), *r));
+     }
+-- 
+2.56.0
+

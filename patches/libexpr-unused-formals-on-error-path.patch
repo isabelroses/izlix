@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sat, 14 Nov 2026 02:08:40 +0000
+Subject: [PATCH] libexpr: don't collect unused formals on every call
+
+matchupLambdaAttrs inserted the name of every formal that fell back to
+its default into a std::set<std::string>, on every call of a function
+with an attrset pattern. the set is only read to produce suggestions
+when an unexpected argument was passed, so build it on that error path.
+---
+ lix/libexpr/eval.cc | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/lix/libexpr/eval.cc b/lix/libexpr/eval.cc
+index b690dcf9d..2cea07863 100644
+--- a/lix/libexpr/eval.cc
++++ b/lix/libexpr/eval.cc
+@@ -999,7 +999,6 @@ struct FormalsMatch
+ {
+     std::vector<SymbolStr> missing;
+     std::vector<SymbolStr> unexpected;
+-    std::set<std::string> unused;
+ };
+ 
+ /** Matchup an attribute argument set to a lambda's formal arguments,
+@@ -1025,7 +1024,6 @@ FormalsMatch matchupLambdaAttrs(EvalState & state, Env & env, Displacement & dis
+         }
+ 
+         // The argument for this formal wasn't given.
+-        result.unused.emplace(symbols[formal.name]);
+         // If the formal has a default, use it.
+         if (formal.def) {
+             env.values[displ] = formal.def->maybeThunk(state, env);
+@@ -1097,7 +1095,15 @@ Env & AttrsPattern::match(
+         if (!formalsMatch.unexpected.empty()) {
+             // suggestions only for the first unexpected argument
+             // TODO: suggestions for all unexpected arguments
+-            sug = Suggestions::bestMatches(formalsMatch.unused, formalsMatch.unexpected.front());
++            // The formals that weren't given are only needed for this error, so they are
++            // collected here rather than on every call.
++            std::set<std::string> unused;
++            for (auto const & formal : formals) {
++                if (!arg.attrs()->get(formal.name)) {
++                    unused.emplace(ctx.symbols[formal.name]);
++                }
++            }
++            sug = Suggestions::bestMatches(unused, formalsMatch.unexpected.front());
+         }
+ 
+         auto argFmt = [](const SymbolStr & argument) { return HintFmt("'%s'", argument); };
+-- 
+2.56.0
+

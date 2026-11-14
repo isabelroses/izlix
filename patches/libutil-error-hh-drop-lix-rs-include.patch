@@ -1,0 +1,113 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: isabel <isabel@isabelroses.com>
+Date: Sat, 14 Nov 2026 11:26:37 +0000
+Subject: [PATCH] libutil: don't include lix-rs/utils.hh from error.hh
+
+error.hh is included by nearly every translation unit, and utils.hh pulls
+in the generated zngur bridge header with it. only a handful of files
+use the bridge, so include it there directly. cuts c++ compile cpu time
+by roughly a tenth.
+---
+ lix/legacy/nix-channel.cc | 1 +
+ lix/legacy/user-env.cc    | 1 +
+ lix/libcmd/repl.cc        | 1 +
+ lix/libexpr/primops.cc    | 1 +
+ lix/libutil/error.cc      | 1 +
+ lix/libutil/error.hh      | 1 -
+ lix/nix/develop.cc        | 1 +
+ lix/nix/main.cc           | 1 +
+ lix/nix/profile.cc        | 1 +
+ 9 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/lix/legacy/nix-channel.cc b/lix/legacy/nix-channel.cc
+index 5f237d0b3..3479dc6f0 100644
+--- a/lix/legacy/nix-channel.cc
++++ b/lix/legacy/nix-channel.cc
+@@ -1,3 +1,4 @@
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libstore/profiles.hh"
+ #include "lix/libmain/shared.hh"
+ #include "lix/libstore/globals.hh"
+diff --git a/lix/legacy/user-env.cc b/lix/legacy/user-env.cc
+index 5c437f6aa..ccea8fda6 100644
+--- a/lix/legacy/user-env.cc
++++ b/lix/legacy/user-env.cc
+@@ -1,4 +1,5 @@
+ #include "user-env.hh"
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libexpr/value.hh"
+ #include "lix/libstore/derivations.hh"
+ #include "lix/libstore/store-api.hh"
+diff --git a/lix/libcmd/repl.cc b/lix/libcmd/repl.cc
+index 9219284aa..43eded613 100644
+--- a/lix/libcmd/repl.cc
++++ b/lix/libcmd/repl.cc
+@@ -8,6 +8,7 @@
+ 
+ #include "libutil/logging.hh"
+ #include "lix-rs/main.gen.hh"
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libexpr/value.hh"
+ #include "lix/libutil/box_ptr.hh"
+ #include "lix/libcmd/repl-interacter.hh"
+diff --git a/lix/libexpr/primops.cc b/lix/libexpr/primops.cc
+index 1268592c0..ab6cddbbb 100644
+--- a/lix/libexpr/primops.cc
++++ b/lix/libexpr/primops.cc
+@@ -1,4 +1,5 @@
+ #include "libutil/error-trace.hh"
++#include "lix/lix-rs/utils.hh"
+ #include "lix/lix-rs/main.gen.hh"
+ #include "lix/libutil/archive.hh"
+ #include "lix/libstore/derivations.hh"
+diff --git a/lix/libutil/error.cc b/lix/libutil/error.cc
+index 77f2a6e8d..4ff059dec 100644
+--- a/lix/libutil/error.cc
++++ b/lix/libutil/error.cc
+@@ -1,3 +1,4 @@
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libutil/concepts.hh"
+ #include "lix/libutil/environment-variables.hh"
+ #include "lix/libutil/error.hh"
+diff --git a/lix/libutil/error.hh b/lix/libutil/error.hh
+index 1909c40fb..2cb37bc98 100644
+--- a/lix/libutil/error.hh
++++ b/lix/libutil/error.hh
+@@ -15,7 +15,6 @@
+  * See libutil/tests/logging.cc for usage examples.
+  */
+ 
+-#include "lix/lix-rs/utils.hh"
+ #include "lix/libutil/error-trace.hh"
+ #include "lix/libutil/json-fwd.hh"
+ #include "lix/libutil/suggestions.hh"
+diff --git a/lix/nix/develop.cc b/lix/nix/develop.cc
+index 5a6b7bdeb..fff7d5482 100644
+--- a/lix/nix/develop.cc
++++ b/lix/nix/develop.cc
+@@ -1,3 +1,4 @@
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libexpr/eval.hh"
+ #include "lix/libcmd/installable-flake.hh"
+ #include "lix/libcmd/command.hh"
+diff --git a/lix/nix/main.cc b/lix/nix/main.cc
+index dba61aee7..470b8df76 100644
+--- a/lix/nix/main.cc
++++ b/lix/nix/main.cc
+@@ -1,3 +1,4 @@
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libutil/args/root.hh"
+ #include "lix/libcmd/command.hh"
+ #include "lix/libmain/common-args.hh"
+diff --git a/lix/nix/profile.cc b/lix/nix/profile.cc
+index d300e7e5b..c6cf75864 100644
+--- a/lix/nix/profile.cc
++++ b/lix/nix/profile.cc
+@@ -1,3 +1,4 @@
++#include "lix/lix-rs/utils.hh"
+ #include "lix/libcmd/command.hh"
+ #include "lix/libcmd/cmd-profiles.hh"
+ #include "lix/libcmd/installable-flake.hh"
+-- 
+2.56.0
+
