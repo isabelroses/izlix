@@ -14,28 +14,18 @@ let
     builtins.substring 0 12 sourceInfo.src.rev
   }";
 
-  licxxbridge = pkgs.buildPackages.rustPlatform.buildRustPackage {
-    pname = "licxxbridge";
-    version = "0.0.0";
-    inherit (sourceInfo) src cargoDeps;
-
-    cargoBuildFlags = [
-      "-p"
-      "licxxbridge"
-    ];
-
-    # only the bridge generator is needed here; skip the workspace test suite
-    doCheck = false;
-
-    meta.mainProgram = "licxxbridge";
-  };
-
   scope = pkgs.lixPackageSets.makeLixScope {
     attrName = "izlix";
 
     lix-args = {
       inherit version;
       inherit (sourceInfo) src cargoDeps;
+
+      # nixpkgs defaults this to false, which passes -Dmimalloc=disabled
+      useMimalloc = true;
+
+      # newer cooler builds
+      useLicxxbridge = true;
 
       patches = [
         # adds a --call-package or -C cli option to build a package from the cli
@@ -67,6 +57,12 @@ let
 
         # don't allocate values in a lamda when _: is the argument
         ./patches/lixexpr-don-t-allocate-on-_.patch
+
+        # build failure on master
+        (pkgs.fetchpatch2 {
+          url = "https://raw.githubusercontent.com/NixOS/nixpkgs/refs/heads/master/pkgs/tools/package-management/lix/lix-rs-tests-whole-archive.patch";
+          hash = "sha256-azPE9n6V29omgDcsGk6krf+P6dXrM9prpCFImhw2n3Y=";
+        })
       ];
     };
   };
@@ -80,96 +76,22 @@ let
         ];
       });
 
-      lix = (prev.lix.override { withAWS = false; }).overrideAttrs (
-        oa:
-        let
-          cxxLinkerFor =
-            stdenv:
-            pkgs.writeShellScript "cxx-lld-linker" ''
-              exec ${lib.getExe' stdenv.cc "${stdenv.cc.targetPrefix}c++"} ${lib.optionalString stdenv.hostPlatform.isLinux "-fuse-ld=lld"} "$@"
-            '';
-          hostCargoEnvVar = pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget;
-          buildCargoEnvVar = pkgs.stdenv.buildPlatform.rust.cargoEnvVarTarget;
-          lldBintools = pkgs.wrapBintoolsWith { bintools = pkgs.llvmPackages.bintools; };
-        in
-        {
-          # Kinda funny right
-          # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
-          postPatch = oa.postPatch or "" + ''
-            substituteInPlace lix/libmain/shared.cc \
-              --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
-          '';
+      lix = (prev.lix.override { withAWS = false; }).overrideAttrs (oa: {
+        # Kinda funny right
+        # worth it https://akko.isabelroses.com/notice/AjlM7Vfq1zlgsEzk0G
+        postPatch = oa.postPatch or "" + ''
+          substituteInPlace lix/libmain/shared.cc \
+            --replace-fail "(Lix, like Nix)" "(Lix, like Nix but for lesbians)"
+        '';
 
-          buildInputs = [
-            # for build minalloc patch
-            pkgs.mimalloc
-          ]
-          ++ (lib.subtractLists [ final.editline ] oa.buildInputs);
+        # seems we still need this
+        buildInputs = lib.subtractLists [ final.editline ] oa.buildInputs;
 
-          nativeBuildInputs = [
-            pkgs.cacert
-            pkgs.mdbook-linkcheck2
+        # these are flakey
+        doInstallCheck = false;
+      });
 
-            pkgs.cargo
-            pkgs.rustPlatform.cargoSetupHook
-          ]
-          ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux) [
-            lldBintools
-          ]
-          ++ (lib.subtractLists [ pkgs.rust-cbindgen ] oa.nativeBuildInputs);
-
-          env =
-            oa.env
-            // {
-              "CARGO_TARGET_${hostCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.clangStdenv;
-            }
-            // lib.optionalAttrs (hostCargoEnvVar != buildCargoEnvVar) {
-              "CARGO_TARGET_${buildCargoEnvVar}_LINKER" = cxxLinkerFor pkgs.buildPackages.clangStdenv;
-            };
-
-          mesonFlags =
-            oa.mesonFlags or [ ]
-            ++ [
-              "-Dlicxxbridge=${lib.getExe licxxbridge}"
-            ]
-            ++ (lib.optionals pkgs.stdenv.hostPlatform.isLinux) [
-              "-Dc_link_args=-fuse-ld=lld"
-              "-Dcpp_link_args=-fuse-ld=lld"
-            ];
-
-          depsBuildBuild = [
-            pkgs.buildPackages.clangStdenv.cc
-          ];
-
-          # these are flakey
-          doInstallCheck = false;
-        }
-      );
-
-      nil = prev.nil.overrideAttrs (
-        finalAttrs: prevAttrs: {
-          src = pkgs.fetchFromGitHub {
-            owner = "oxalica";
-            repo = "nil";
-            rev = "504599f7e555a249d6754698473124018b80d121";
-            hash = "sha256-18j8X2Nbe0Wg1+7YrWRlYzmjZ5Wq0NCVwJHJlBIw/dc=";
-          };
-
-          cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-            inherit (finalAttrs) src;
-            hash = "sha256-LS2IW4gZ1k6Xl5weMNwxvVA2z56r4rPkjqrkROZTmBw=";
-          };
-
-          # broken by docs updates
-          doCheck = false;
-
-          patches = prevAttrs.patches or [ ] ++ [
-            ./patches/nil-feat-inherit-completion.patch
-          ];
-        }
-      );
-
-      nix-serve-ng = prev.nix-serve-ng.overrideAttrs (prevAttrs: {
+      nix-serve-ng = prev.nix-serve-ng.overrideAttrs (_: {
         meta.broken = true;
       });
 
