@@ -67,6 +67,78 @@ let
         # build speedup, keeps the zngur bridge header out of most translation units
         ./patches/libutil-error-hh-drop-lix-rs-include.patch
 
+        # primops: use rust toml parser instead of toml11
+        # <https://gerrit.lix.systems/c/lix/+/6712>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6712/revisions/6/patch?download&raw";
+          hash = "sha256-tf+2wWA8T2b1KCSv3KrZuiKe0pZdMym9P08w5DC81Vo=";
+        })
+
+        # daemon-protocol: better errors when the protocol is derived from socket-activation
+        # <https://gerrit.lix.systems/c/lix/+/6870>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6870/revisions/1/patch?download&raw";
+          hash = "sha256-7yfcYbjFOXL8taMBhFHut/lUgfdHh/hlnwPUC9SZJYU=";
+        })
+
+        # libcmd/repl: better quoted attrs completion
+        # <https://gerrit.lix.systems/c/lix/+/5515>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~5515/revisions/3/patch?download&raw";
+          hash = "sha256-4lI8TqVogFZ1nZZpLgp3hKY2fCd1oyYT+dFMK4N0Gy8=";
+        })
+
+        # gc surfaces paths it failed to delete (with a macOS TCC hint) and counts
+        # deleted paths accurately. this is a stack, so order matters
+        # <https://gerrit.lix.systems/c/lix/+/6546>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6546/revisions/1/patch?download&raw";
+          hash = "sha256-xh3Ig/3/RrYQoE/feFSjpFuvTAJP3pyruw5dI6iJ9Jw=";
+        })
+        # <https://gerrit.lix.systems/c/lix/+/6547>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6547/revisions/1/patch?download&raw";
+          hash = "sha256-sibERP1I3vARjSyIWeoF69AjEIMYL0aKqztr4c5TvZ8=";
+        })
+        # <https://gerrit.lix.systems/c/lix/+/6548>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6548/revisions/1/patch?download&raw";
+          hash = "sha256-tIQKeofxxBVIesPUotcUjGbyc22SDRI+7u+bHaSEhTY=";
+        })
+        # <https://gerrit.lix.systems/c/lix/+/6549>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6549/revisions/1/patch?download&raw";
+          hash = "sha256-BxzxV/CrJ553VEJl/3cWiSzPKn8zUCz23xzwkegf9so=";
+        })
+
+        # legacy/nix-shell: do not run shellHook at shebang time
+        # <https://gerrit.lix.systems/c/lix/+/6208>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6208/revisions/1/patch?download&raw";
+          hash = "sha256-u+uPITCgPhJb7K0YST/j1YheiN8Y0fngbP1dXyc4AA4=";
+        })
+
+        # don't error on --arg/--argstr when using -f/--expr instead of a flake
+        # <https://gerrit.lix.systems/c/lix/+/2609>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~2609/revisions/1/patch?download&raw";
+          hash = "sha256-DHGfyDsoPTjjtqJQu5BEpKzd5GaSEwx9eKFxSubjMnQ=";
+        })
+
+        # libstore: propagate auto-GC failures to waiters
+        # <https://gerrit.lix.systems/c/lix/+/6812>
+        (pkgs.fetchpatch2 {
+          url = "https://gerrit.lix.systems/changes/lix~6812/revisions/1/patch?download&raw";
+          hash = "sha256-/eqUZLFbDtdXsG/Q24UIe9pyRoS4DxXW0hAQxyq2Qco=";
+        })
+
+        # libstore: read stderr while waiting for authentication, so the ssh banner
+        # shows up before you touch your yubikey and not after
+        # rebased from <https://gerrit.lix.systems/c/lix/+/6609/9>: dropped the
+        # legacy-ssh-store.cc hunks (that store is gone) and fixed flushLine
+        # touching recentStderr after it's reset
+        ./patches/libstore-read-ssh-stderr-during-auth.patch
+
         # build failure on master
         (pkgs.fetchpatch2 {
           url = "https://raw.githubusercontent.com/NixOS/nixpkgs/refs/heads/master/pkgs/tools/package-management/lix/lix-rs-tests-whole-archive.patch";

@@ -1,0 +1,141 @@
+From a7248b9abc4765dacfc6fc2719f862a3c4542ba3 Mon Sep 17 00:00:00 2001
+From: Jappie3 <jappie3+git@jappie.dev>
+Date: Sat, 10 Oct 2026 15:19:45 +0200
+Subject: [PATCH] libstore: read stderr while waiting for authentication
+
+57fb4f534d2ae73cffb5673c32164bc7a93e6d47 introduced a subtle bug where
+the SSH banner (which is sent over stderr) would not be printed until
+*after* authentication completed. This becomes extra noticeable when
+using something like a yubikey (which waits for physical user
+confirmation), not having the SSH banner as an indicator of this is a
+bit annoying.
+
+Without this commit, nothing reads stderr until after the connection is
+authenticated. Now, the log handler is started as soon as ssh is spawned
+and we keep a buffer of the most recent logs until the connection is
+established.
+
+[izlix] rebased onto a tree without legacy-ssh-store.cc: dropped those hunks,
+and guarded recentStderr in ssh-store.cc's flushLine since it is reset once
+the connection is established while logHandler keeps running.
+
+Change-Id: If39f426cd8381643b1756b57c69dbd5e6a6a6964
+---
+ lix/libstore/remote-store-connection.hh |  4 ++--
+ lix/libstore/remote-store.cc            | 11 +++++++---
+ lix/libstore/ssh-store.cc               | 28 +++++++++++++++++++------
+ 3 files changed, 32 insertions(+), 11 deletions(-)
+
+diff --git a/lix/libstore/remote-store-connection.hh b/lix/libstore/remote-store-connection.hh
+index a2d5c07af..5ee504ac8 100644
+--- a/lix/libstore/remote-store-connection.hh
++++ b/lix/libstore/remote-store-connection.hh
+@@ -107,9 +107,9 @@ struct RemoteStore::Connection
+     /**
+      * hook to provide additional error information for a failed connection.
+      */
+-    virtual std::string connectErrorInfo()
++    virtual kj::Promise<Result<std::string>> connectErrorInfo()
+     {
+-        return "";
++        return {result::success(std::string{})};
+     }
+ 
+     bool invalidated = false;
+diff --git a/lix/libstore/remote-store.cc b/lix/libstore/remote-store.cc
+index 37c36060e..9012bf82b 100644
+--- a/lix/libstore/remote-store.cc
++++ b/lix/libstore/remote-store.cc
+@@ -61,6 +61,7 @@ try {
+ 
+ kj::Promise<Result<void>> RemoteStore::initConnection(Connection & conn)
+ try {
++    std::optional<std::string> error_result;
+     /* Send the magic greeting, check for the reply. */
+     try {
+         AsyncFdIoStream stream{AsyncFdIoStream::shared_fd{}, conn.getFD()};
+@@ -105,16 +106,20 @@ try {
+         }
+     }
+     catch (Error & e) {
+-        auto info = conn.connectErrorInfo();
++        error_result = e.what();
++    }
++
++    if (error_result) {
++        auto info = TRY_AWAIT(conn.connectErrorInfo());
+         throw Error(
+             "cannot open connection to remote store '%s': %s%s%s%s",
+             getUri(),
+-            e.what(),
++            *error_result,
+             Uncolored(info.empty() ? "" : " ("),
+             info,
+             Uncolored(info.empty() ? "" : ")")
+         );
+-    }
++    };
+ 
+     TRY_AWAIT(setOptions(conn));
+     co_return result::success();
+diff --git a/lix/libstore/ssh-store.cc b/lix/libstore/ssh-store.cc
+index 75cc61b00..304c7f67a 100644
+--- a/lix/libstore/ssh-store.cc
++++ b/lix/libstore/ssh-store.cc
+@@ -106,6 +106,8 @@ protected:
+         kj::Promise<void> logHandlerPromise{nullptr};
+         std::unique_ptr<SSH::Connection> sshConn;
+ 
++        std::optional<std::string> recentStderr{std::string{}};
++
+         ~Connection() noexcept = default;
+ 
+         int getFD() const override
+@@ -113,10 +115,14 @@ protected:
+             return sshConn->socket.get();
+         }
+ 
+-        std::string connectErrorInfo() override
+-        {
+-            return chomp(drainFD(sshConn->stderrPipe.get(), false));
+-        }
++        kj::Promise<Result<std::string>> connectErrorInfo() override
++        try {
++            sshConn.reset();
++            co_await std::move(logHandlerPromise);
++            co_return {result::success(chomp(recentStderr.value_or("")))};
++        } catch(...) {
++            co_return {result::current_exception()};
++        };
+ 
+         kj::Promise<void> logHandler(std::string storeUri)
+         try {
+@@ -125,7 +131,16 @@ protected:
+ 
+             LogLineSplitter splitter;
+ 
+-            auto flushLine = [&](const std::string & line) { debug("ssh(%s): %s", storeUri, line); };
++            auto flushLine = [&](const std::string & line) {
++                debug("ssh(%s): %s", storeUri, line);
++                // only buffered until the connection is established, see makeConnection
++                if (recentStderr) {
++                    if (!recentStderr->empty()) {
++                        *recentStderr += '\n';
++                    }
++                    *recentStderr += line;
++                }
++            };
+ 
+             auto buf = kj::heapArray<char>(4096);
+             while (true) {
+@@ -235,8 +250,9 @@ try {
+         command += " --store " + shellEscape(config_.remoteStore.get());
+ 
+     conn->sshConn = ssh.startCommand(command);
+-    TRY_AWAIT(RemoteStore::initConnection(*conn));
+     conn->logHandlerPromise = conn->logHandler(getUri());
++    TRY_AWAIT(RemoteStore::initConnection(*conn));
++    conn->recentStderr.reset();
+     co_return conn;
+ } catch (...) {
+     co_return result::current_exception();
