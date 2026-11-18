@@ -69,17 +69,10 @@ let
 
         # primops: use rust toml parser instead of toml11
         # <https://gerrit.lix.systems/c/lix/+/6712>
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~6712/revisions/6/patch?download&raw";
-          hash = "sha256-tf+2wWA8T2b1KCSv3KrZuiKe0pZdMym9P08w5DC81Vo=";
-        })
-
-        # daemon-protocol: better errors when the protocol is derived from socket-activation
-        # <https://gerrit.lix.systems/c/lix/+/6870>
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~6870/revisions/1/patch?download&raw";
-          hash = "sha256-7yfcYbjFOXL8taMBhFHut/lUgfdHh/hlnwPUC9SZJYU=";
-        })
+        # (pkgs.fetchpatch2 {
+        #   url = "https://gerrit.lix.systems/changes/lix~6712/revisions/6/patch?download&raw";
+        #   hash = "sha256-tf+2wWA8T2b1KCSv3KrZuiKe0pZdMym9P08w5DC81Vo=";
+        # })
 
         # libcmd/repl: better quoted attrs completion
         # <https://gerrit.lix.systems/c/lix/+/5515>
