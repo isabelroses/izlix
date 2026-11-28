@@ -98,11 +98,6 @@ let
           url = "https://gerrit.lix.systems/changes/lix~6548/revisions/1/patch?download&raw";
           hash = "sha256-tIQKeofxxBVIesPUotcUjGbyc22SDRI+7u+bHaSEhTY=";
         })
-        # <https://gerrit.lix.systems/c/lix/+/6549>
-        (pkgs.fetchpatch2 {
-          url = "https://gerrit.lix.systems/changes/lix~6549/revisions/1/patch?download&raw";
-          hash = "sha256-BxzxV/CrJ553VEJl/3cWiSzPKn8zUCz23xzwkegf9so=";
-        })
 
         # legacy/nix-shell: do not run shellHook at shebang time
         # <https://gerrit.lix.systems/c/lix/+/6208>
